@@ -1,3 +1,5 @@
+!!! ALBUM ART DISABLED UNTIL 2026.2.0 !!
+
 ---
 
 # Minimalistic Sendspin Media Player for ESPHome / Home Assistant
