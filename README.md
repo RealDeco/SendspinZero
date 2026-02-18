@@ -86,5 +86,10 @@ All parts were sourced from AliExpress and added up to **just over $10** the las
 * **GND**
 * **3.3V**
 
+### And remember to solder the pads on the back of the PCM5102A:
+<img width="861" height="504" alt="Screenshot 2026-02-18 at 04 08 59" src="https://github.com/user-attachments/assets/d8fbec92-4695-4a40-9585-9ff9b06a3388" />
+
+
+
 ---
 
