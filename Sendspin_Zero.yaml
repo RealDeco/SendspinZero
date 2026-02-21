@@ -56,53 +56,46 @@ time:
 
 external_components:
   - source:
-      # https://github.com/esphome/esphome/pull/12253 (merged into upstream ESPHome, will be available in ESPHome 2026.2.0)
+      # https://github.com/esphome/esphome/pull/12429
       type: git
       url: https://github.com/esphome/esphome
-      ref: c28c97fbaf15c4ce353317e873054fb00a1d7a6d  # ESPHome dev branch commit hash
-    components: [mixer]
-  - source:
-      # https://github.com/esphome/esphome/pull/12254 (merged into upstream ESPHome, will be available in ESPHome 2026.2.0)
-      type: git
-      url: https://github.com/esphome/esphome
-      ref: 298efb53400852a09e2f8bdf16feac9a58422059  # ESPHome dev branch commit hash
-    components: [resampler]
-  - source:
-      # https://github.com/esphome/esphome/pull/12256
-      type: git
-      url: https://github.com/esphome/esphome
-      ref: 9148832ea4e54907bad71a24d4ced1ce6c862433
-    components: [audio]
-  - source:
-      # https://github.com/esphome/esphome/pull/12258
-      type: git
-      url: https://github.com/esphome/esphome
-      ref: bff22983a390352360796f8e1363127e0cd1f898
-    components: [media_player]
+      ref: a6c403deb7603d316dce2820897902e01c3695cc
+    refresh: 0s
+    components: [file, http_request, media_source, speaker_source]
   - source:
       # https://github.com/esphome/esphome/pull/12284
       type: git
       url: https://github.com/esphome/esphome
-      ref: 3cc894763b05ac8ffd9fdd15bcb549d47cadf6eb
-#      ref: 4a280e428a10a20cf9fd044278c6c24be5a5d6a5
-#   REMOVED generic_image until 2026.2.0
-    components: [mdns, sendspin]
+      ref: 119a5c25a483c58b3d58a35c8cec95495c6491c2
+    components: [generic_image, sendspin]
+
+  # The following sources are merged into the dev branch of ESPHome, but not yet in a release.
+  # We've pinned them to their specific squash merge commit id for reproducable builds.
+  # These should be available in ESPHome 2026.3.0
   - source:
-      # https://github.com/esphome/esphome/pull/12429
+      # Dev commit hash for squash merge from PR#10212
       type: git
       url: https://github.com/esphome/esphome
-      ref: 32708a2ee74f5ea4107448f62755004ad3e879c5
-    refresh: 0s
-    components: [file, http_request, media_source, speaker_source]
-
-  - source: github://pr#10212
-    components: [runtime_image, online_image]
-#  - source:
-#      type: git
-#      url: https://github.com/kahrendt/esphome
-#      ref: wifi-power-save-wake-loop
-#    refresh: 0s
-#    components: [wifi]
+      ref: 903971de12c1b291ca8cd367ce5cdf9af8b304ae
+    components: [runtime_image]
+  - source:
+      # Dev commit hash for squash merge from PR#12258
+      type: git
+      url: https://github.com/esphome/esphome
+      ref: 264c8faedd0ab956b0437ec2ecc0bacae1708923
+    components: [media_player]
+  - source:
+      # Dev commit hash for squash merge from PR#14013
+      type: git
+      url: https://github.com/esphome/esphome
+      ref: ba7134ee3f870ce00d2990d84b142b734028330f
+    components: [mdns]
+  - source:
+      # Dev commit hash for squash merge from PR#14108
+      type: git
+      url: https://github.com/esphome/esphome
+      ref: d2026b4cd74bbeb9b86941bf1887f3d93d639387
+    components: [audio]
 
 globals:
   - id: sendspin_album_art_valid
@@ -584,7 +577,7 @@ light:
     icon: "mdi:television"
     entity_category: config
     output: backlight_output
-    restore_mode: ALWAYS_ON
+    restore_mode: RESTORE_DEFAULT_ON
     default_transition_length: 250ms
 
   - platform: esp32_rmt_led_strip
