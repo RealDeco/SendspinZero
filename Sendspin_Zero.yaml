@@ -116,7 +116,7 @@ globals:
     initial_value: "false"
 
 image:
-  - file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Casita/240x240/playing.png
+  - file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Gwen/240x240/playing.png
     id: fallback_playing_image
     resize: 240x240
     type: RGB565
