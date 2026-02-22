@@ -122,25 +122,25 @@ image:
     type: RGB565
     dither: NONE
 
-#generic_image:
-#  - platform: sendspin
-#    id: sendspin_album_art
-#    format: jpg
-#    type: RGB565
-#    resize: 200x200
-#    image_source: ALBUM
-#    on_image_decoded:
-#      - lambda: |-
-#          id(sendspin_album_art_valid) = true;
-#      - lvgl.image.update:
-#          id: album_art_widget
-#          src: sendspin_album_art
-#    on_image_error:
-#      - lambda: |-
-#          id(sendspin_album_art_valid) = false;
-#      - lvgl.image.update:
-#          id: album_art_widget
-#          src: fallback_playing_image
+generic_image:
+  - platform: sendspin
+    id: sendspin_album_art
+    format: jpg
+    type: RGB565
+    resize: 200x200
+    image_source: ALBUM
+    on_image_decoded:
+      - lambda: |-
+          id(sendspin_album_art_valid) = true;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: sendspin_album_art
+    on_image_error:
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: fallback_playing_image
 
 sensor:
   - platform: homeassistant
@@ -458,11 +458,12 @@ media_source:
 
 media_player:
   - platform: sendspin
-    id: sendspin_group_media_player
+    id: sendspin_media
+    name: Sendspin Group Media Player
 
   - platform: speaker_source
+    name: Sendspin Media Player
     id: external_media_player
-    name: none
     announcement_speaker: announcement_resampling_input
     media_speaker: media_resampling_input
 
@@ -477,7 +478,7 @@ media_player:
 
     volume_increment: 0.05
     volume_min: 0.5
-    volume_max: 0.9
+    volume_max: 0.8
     sources:
       - http_source
       - sendspin_source
