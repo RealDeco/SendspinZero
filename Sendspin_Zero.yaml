@@ -5,7 +5,7 @@ substitutions:
 esphome:
   name: esphome-web-09a588
   friendly_name: Sendspin Zero Display
-  min_version: 2026.1.0
+  min_version: 2026.2.0
   name_add_mac_suffix: false
   on_boot:
     priority: -100
@@ -118,7 +118,7 @@ globals:
 image:
   - file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Casita/240x240/playing.png
     id: fallback_playing_image
-    resize: 200x200
+    resize: 240x240
     type: RGB565
     dither: NONE
 
@@ -127,7 +127,7 @@ generic_image:
     id: sendspin_album_art
     format: jpg
     type: RGB565
-    resize: 200x200
+    resize: 240x240
     image_source: ALBUM
     on_image_decoded:
       - lambda: |-
@@ -226,6 +226,14 @@ text_sensor:
       }
       return s;
     on_value:
+      - lvgl.label.update: { id: now_playing_o_nw, text: !lambda return x; }
+      - lvgl.label.update: { id: now_playing_o_n,  text: !lambda return x; }
+      - lvgl.label.update: { id: now_playing_o_ne, text: !lambda return x; }
+      - lvgl.label.update: { id: now_playing_o_w,  text: !lambda return x; }
+      - lvgl.label.update: { id: now_playing_o_e,  text: !lambda return x; }
+      - lvgl.label.update: { id: now_playing_o_sw, text: !lambda return x; }
+      - lvgl.label.update: { id: now_playing_o_s,  text: !lambda return x; }
+      - lvgl.label.update: { id: now_playing_o_se, text: !lambda return x; }
       - lvgl.label.update:
           id: now_playing_label
           text: !lambda return x;
@@ -743,28 +751,41 @@ lvgl:
       widgets:
         - image:
             id: album_art_widget
-            align: TOP_MID
-            y: 10
+            align: CENTER
+            x: 0
+            y: 0
             src: fallback_playing_image
-            width: 200
-            height: 200
+            width: 240
+            height: 240
             antialias: true
             clickable: false
 
         - obj:
+            id: now_playing_container
             align: BOTTOM_MID
+            y: -6
             width: 240
-            height: 30
-            bg_color: 0x000000
+            height: 34
+            bg_opa: TRANSP
+            border_opa: TRANSP
             border_width: 0
             pad_all: 0
             scrollbar_mode: "OFF"
             clickable: false
             widgets:
+              - label: { id: now_playing_o_nw, align: CENTER, x: -1, y: -1, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+              - label: { id: now_playing_o_n,  align: CENTER, x:  0, y: -1, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+              - label: { id: now_playing_o_ne, align: CENTER, x:  1, y: -1, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+              - label: { id: now_playing_o_w,  align: CENTER, x: -1, y:  0, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+              - label: { id: now_playing_o_e,  align: CENTER, x:  1, y:  0, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+              - label: { id: now_playing_o_sw, align: CENTER, x: -1, y:  1, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+              - label: { id: now_playing_o_s,  align: CENTER, x:  0, y:  1, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+              - label: { id: now_playing_o_se, align: CENTER, x:  1, y:  1, width: 232, text: "", text_color: 0x000000, long_mode: SCROLL_CIRCULAR, text_align: CENTER }
+
               - label:
                   id: now_playing_label
                   align: CENTER
-                  width: 230
+                  width: 232
                   text: ""
                   text_color: 0xFFFFFF
                   long_mode: SCROLL_CIRCULAR
