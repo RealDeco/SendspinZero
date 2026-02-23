@@ -428,7 +428,6 @@ speaker:
     dac_type: external
     channel: stereo
     buffer_duration: 300ms
-
   - platform: mixer
     id: mixing_speaker
     output_speaker: box_speaker
@@ -436,12 +435,10 @@ speaker:
     source_speakers:
       - id: announcement_mixer_input
       - id: media_mixer_input
-
   - platform: resampler
     id: media_resampling_input
     output_speaker: media_mixer_input
     sample_rate: 48000
-
   - platform: resampler
     id: announcement_resampling_input
     output_speaker: announcement_mixer_input
@@ -466,15 +463,12 @@ media_source:
 
 media_player:
   - platform: sendspin
-    id: sendspin_media
-    name: Sendspin Group Media Player
-
+    id: sendspin_group_media_player
   - platform: speaker_source
-    name: Sendspin Media Player
     id: external_media_player
+    name: "Zero Media Player"
     announcement_speaker: announcement_resampling_input
     media_speaker: media_resampling_input
-
     announcement_pipeline:
       format: FLAC
       num_channels: 1
@@ -483,14 +477,8 @@ media_player:
       format: FLAC
       num_channels: 2
       sample_rate: 48000
-
     volume_increment: 0.05
-    volume_min: 0.5
-    volume_max: 0.8
-    sources:
-      - http_source
-      - sendspin_source
-      - file_source
+    sources: [http_source, sendspin_source, file_source]
 
     on_play:
       then:
