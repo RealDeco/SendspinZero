@@ -59,6 +59,13 @@ All parts were sourced from AliExpress and added up to **just over $10** the las
 
 <img width="100%" alt="Wiring diagram" src="https://github.com/user-attachments/assets/a2e1a7a3-8c68-4d39-9ab9-c8ddd73a0274" />
 
+
+### If you plan to put it in the box, do not solder pins to the DAC, zero and display, solder cords directly to boards or they won't fit.
+### I reused the display from breadboard that had pins soldered on so had to bend 2 legs to make space for the jack.
+![20260225_184128](https://github.com/user-attachments/assets/2a2601aa-c974-442e-9661-5e50fb09f139)
+
+
+
 ---
 
 ## Pin Mapping
