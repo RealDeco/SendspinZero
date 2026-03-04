@@ -15,6 +15,7 @@ esphome:
 
 esp32:
   variant: esp32s3
+  flash_size: 4MB
   framework:
     type: esp-idf
 
@@ -130,6 +131,7 @@ generic_image:
     resize: 240x240
     image_source: ALBUM
     on_image_decoded:
+      - script.stop: album_art_timeout_fallback
       - lambda: |-
           id(sendspin_album_art_valid) = true;
       - lvgl.image.update:
@@ -198,9 +200,7 @@ text_sensor:
     on_value:
       - lambda: |-
           id(sendspin_album_art_valid) = false;
-      - lvgl.image.update:
-          id: album_art_widget
-          src: fallback_playing_image
+      - script.execute: album_art_timeout_fallback
       - component.update: now_playing_text
 
   - platform: sendspin
@@ -209,9 +209,7 @@ text_sensor:
     on_value:
       - lambda: |-
           id(sendspin_album_art_valid) = false;
-      - lvgl.image.update:
-          id: album_art_widget
-          src: fallback_playing_image
+      - script.execute: album_art_timeout_fallback
       - component.update: now_playing_text
 
   - platform: template
@@ -493,9 +491,7 @@ media_player:
 
     on_play:
       then:
-        - lvgl.image.update:
-            id: album_art_widget
-            src: fallback_playing_image
+        - script.stop: mp_idle_debounce
         - lvgl.page.show: sendspin_page
         - script.execute: led_green
 
@@ -505,15 +501,36 @@ media_player:
 
     on_idle:
       then:
-        - lvgl.page.show: idle_page
+        - script.execute: mp_idle_debounce
         - script.execute: led_red
 
     on_pause:
       then:
-        - lvgl.page.show: idle_page
         - script.execute: led_red
 
 script:
+  - id: album_art_timeout_fallback
+    mode: restart
+    then:
+      - delay: 800ms
+      - if:
+          condition:
+            lambda: 'return !id(sendspin_album_art_valid);'
+          then:
+            - lvgl.image.update:
+                id: album_art_widget
+                src: fallback_playing_image
+  - id: mp_idle_debounce
+    mode: restart
+    then:
+      - delay: 1200ms
+      - if:
+          condition:
+            and:
+              - media_player.is_idle: external_media_player
+          then:
+            - lvgl.page.show: idle_page
+            - script.execute: led_red
   - id: play_sound
     parameters:
       priority: bool
@@ -521,12 +538,12 @@ script:
     then:
       - if:
           condition:
-            lambda: |-
-              return sound_file == "ready_sound";
+            lambda: 'return sound_file == "ready_sound";'
           then:
-            - lambda: |-
-                id(boot_announce_active) = true;
+            - lambda: 'id(boot_announce_active) = true;'
             - lvgl.page.show: boot_sound_page
+            - delay: 2s
+            - lambda: 'id(boot_announce_active) = false;'
 
       - if:
           condition:
