@@ -1,6 +1,3 @@
-!!! ALBUM ART DISABLED UNTIL 2026.2.0 !!
-
----
 
 # Minimalistic Sendspin Media Player for ESPHome / Home Assistant
 
@@ -97,4 +94,33 @@ All parts were sourced from AliExpress and added up to **just over $10** the las
 <img src="https://github.com/user-attachments/assets/17d6b71f-2928-4bff-ac34-9cff48638098" />
 
 ---
+
+## Added Toslink (optical audio) version.
+
+Toslink version without display, this is about the easiest project to make! and for under §10 :)
+
+
+<img width="2544" height="1211" alt="Screenshot 2026-03-07 at 06 19 25" src="https://github.com/user-attachments/assets/f600ec5b-6d98-4597-b9a6-dfba106eeef2" />
+
+Your Soundbar will love you for it ;) - 3D files for case is in [3D_Files](3D_Files)
+
+## Pin Mapping (even easier)
+
+### ESP32-S3 → toslink connector
+
+| ESP32-S3 GPIO | PCM5102A Pin |
+| ------------- | ------------ |
+| GPIO4         | DATA         |
+| 3.3V          | VCC          |
+| GND           | GND          |
+
+---
+
+Links to toslink connector that fits the 3d case:
+
+single: https://www.aliexpress.com/item/1005011593001325.html
+
+1-10pcs: https://www.aliexpress.com/item/1005008393864163.html
+
+!IMPORTANT: choose "Transmitting end" (A1)
 
