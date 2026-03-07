@@ -20,6 +20,14 @@ logger:
   level: debug
 
 api:
+  on_client_connected:
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, std::string("ready_sound"));
+          }
+        }
 
 ota:
   - platform: esphome
@@ -92,7 +100,7 @@ i2s_audio:
 speaker:
   - platform: i2s_audio
     id: box_speaker
-    sample_rate: 48000
+    sample_rate: 44100
     i2s_dout_pin: GPIO4
     spdif_mode: true
     bits_per_sample: 16bit
@@ -107,31 +115,41 @@ speaker:
     id: mixing_speaker
     output_speaker: box_speaker
     num_channels: 2
+    task_stack_in_psram: false
     source_speakers:
       - id: announcement_mixer_input
+        timeout: 250ms
+        buffer_duration: 250ms
       - id: media_mixer_input
+        timeout: 250ms
+        buffer_duration: 250ms
 
   - platform: resampler
     id: media_resampling_input
     output_speaker: media_mixer_input
-    sample_rate: 48000
+    sample_rate: 44100
+    buffer_duration: 250ms
+    task_stack_in_psram: false
 
   - platform: resampler
     id: announcement_resampling_input
     output_speaker: announcement_mixer_input
-    sample_rate: 48000
+    sample_rate: 44100
+    buffer_duration: 250ms
+    task_stack_in_psram: false
 
 sendspin:
   id: sendspin_hub
-  task_stack_in_psram: true
+  task_stack_in_psram: false
   kalman_process_error: 0.01
 
 media_source:
   - platform: sendspin
     id: sendspin_source
+    buffer_size: 524288
   - platform: http_request
     id: http_source
-    buffer_size: 500000
+    buffer_size: 44100
   - platform: file
     id: file_source
     files:
@@ -151,11 +169,11 @@ media_player:
     announcement_pipeline:
       format: FLAC
       num_channels: 1
-      sample_rate: 48000
+      sample_rate: 44100
     media_pipeline:
       format: FLAC
       num_channels: 2
-      sample_rate: 48000
+      sample_rate: 44100
 
     # Put the restrictions BACK here (device range)
     volume_increment: 0.05
@@ -232,6 +250,10 @@ switch:
 
 globals:
   - id: boot_sound_played
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: boot_announce_active
     type: bool
     restore_value: no
     initial_value: "false"
