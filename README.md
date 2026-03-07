@@ -116,11 +116,13 @@ Your Soundbar will love you for it ;) - 3D files for case is in [3D_Files](3D_Fi
 
 ---
 
-Links to toslink connector that fits the 3d case:
+Links to parts, esp32-s3 zero is same as above, toslink connector that fits the 3d case:
 
 single: https://www.aliexpress.com/item/1005011593001325.html
 
 1-10pcs: https://www.aliexpress.com/item/1005008393864163.html
 
-!IMPORTANT: choose "Transmitting end" (A1)
+and 1 M2.6x10 self tapping screw to hold the toslink plug in place
+
+!IMPORTANT: remember to choose "Transmitting end" (A1)
 
