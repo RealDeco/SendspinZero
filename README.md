@@ -122,7 +122,10 @@ single: https://www.aliexpress.com/item/1005011593001325.html
 
 1-10pcs: https://www.aliexpress.com/item/1005008393864163.html
 
+Cords: https://www.aliexpress.com/item/1005008202856228.html
+
 and 1 M2.6x10 self tapping screw to hold the toslink plug in place
 
 !IMPORTANT: remember to choose "Transmitting end" (A1)
 
+---
