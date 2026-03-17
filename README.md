@@ -136,7 +136,7 @@ and 1 M2.6x10 self tapping screw to hold the toslink plug in place
 Optionally it's possible to use Coax SPDIF output instead of Toslink. - One cord less + one resister (330-470ohm). 3D files for case with and without display in 3D Files.
 
 
-<img width="1000" height="459" alt="Image" src="https://github.com/user-attachments/assets/a638850f-e92f-4705-b995-3655c7c123b7" />
+<img width="1000" height="459" alt="Image" src="https://github.com/user-attachments/assets/0daa8227-f093-4db7-932d-d1da08eeb516" />
 
 ---
 
