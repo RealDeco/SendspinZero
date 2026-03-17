@@ -20,9 +20,7 @@ esp32:
     type: esp-idf
 
 logger:
-  level: debug
-  logs:
-    text_sensor: WARN
+  level: WARN
 
 api:
   on_client_connected:
@@ -335,7 +333,9 @@ text_sensor:
           id(weather_available) = (x != "Weather unavailable");
       - if:
           condition:
-            lambda: return id(weather_available);
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: return id(weather_available);
           then:
             - lvgl.widget.show: weather_header
             - lvgl.widget.show: weather_label
@@ -347,19 +347,24 @@ text_sensor:
                 id: weather_label
                 text: !lambda return x;
           else:
-            - lvgl.widget.hide: weather_header
-            - lvgl.widget.hide: weather_label
-            - lvgl.widget.hide: weather_label_glow
+            - if:
+                condition:
+                  lvgl.page.is_showing: idle_page
+                then:
+                  - lvgl.widget.hide: weather_header
+                  - lvgl.widget.hide: weather_label
+                  - lvgl.widget.hide: weather_label_glow
 
 font:
   - file:
       type: gfonts
-      family: Figtree
+      family: Noto Sans
       weight: 300
     id: font_display
     size: 18
     glyphsets:
       - GF_Latin_Core
+      - GF_Cyrillic_Core
 
   - file:
       type: gfonts
@@ -639,7 +644,7 @@ display:
 lvgl:
   displays:
     - main_display
-  buffer_size: 25%
+  buffer_size: 12%
   color_depth: 16
   bg_color: 0x000000
   default_font: font_display
@@ -773,7 +778,7 @@ lvgl:
             src: fallback_playing_image
             width: 240
             height: 240
-            antialias: true
+            antialias: false
             clickable: false
 
         - obj:
