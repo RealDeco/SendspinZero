@@ -1,4 +1,7 @@
 
+<img width="1500" height="603" alt="Screenshot 2026-03-15 at 08 15 55 copy" src="https://github.com/user-attachments/assets/cf58463a-1112-4aff-8982-a297d2f72e1a" />
+
+
 # Minimalistic Sendspin Media Player for ESPHome / Home Assistant
 
 A tiny Sendspin media player with **cover art display** and a **weather clock**, built around the **ESP32-S3 Zero**.
