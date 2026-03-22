@@ -14,4 +14,4 @@ Each one has front for both with and without display.
 
 - Printed in PETG and not tested in PLA, size "could" vary. (feedback welcome)
 - The `.3mf` files were created with an **older version of Bambu Studio** to ensure broad compatibility.
-- **STL files are available upon request.**
+- **STL files available**
