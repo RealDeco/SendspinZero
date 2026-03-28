@@ -1,10 +1,38 @@
+## SendspinZero for Analog + Digital Coax and Toslink versions WITHOUT display. Edit the settings below.
 substitutions:
-  startup_sound_file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/Home_Connected.flac
-
-esphome:
   name: esphome-web-e82548
   friendly_name: Sendspin Zero NO Display
-  min_version: 2026.3.0
+
+## SETTINGS ######################################################################################################################################
+
+  # Startup sound, options are: Home_Connected or Home_Connected_Male
+  startup_sound_file: Home_Connected
+
+  # your home assistant weather entity, in most cases the same.
+  ha_weather_entity: weather.forecast_home
+
+packages: # uncomment the one you use (analog for normal jack, digital for coax or toslink spdif)
+
+  hw: #ANALOG
+    url: https://github.com/RealDeco/SendspinZero.git
+    ref: main
+    refresh: 0s
+    files:
+      - analog_speaker_config.yaml
+
+#  hw: #DIGITAL
+#    url: https://github.com/RealDeco/SendspinZero.git
+#    ref: main
+#    refresh: 0s
+#    files:
+#      - digital_speaker_config.yaml
+
+##################################################################################################################################################
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.1.0
   name_add_mac_suffix: false
   on_boot:
     priority: -100
@@ -59,40 +87,6 @@ external_components:
     refresh: 0s
     components: [http_request]
 
-i2s_audio:
-  - id: i2s_audio_bus
-    i2s_lrclk_pin: GPIO4
-    i2s_bclk_pin: GPIO5
-
-speaker:
-  - platform: i2s_audio
-    id: box_speaker
-    i2s_audio_id: i2s_audio_bus
-    i2s_dout_pin: GPIO6
-    dac_type: external
-    channel: stereo
-
-  - platform: mixer
-    id: mixing_speaker
-    output_speaker: box_speaker
-    num_channels: 2
-    task_stack_in_psram: true
-    source_speakers:
-      - id: announcement_mixing_input
-      - id: media_mixing_input
-
-  - platform: resampler
-    id: announcement_resampling_speaker
-    output_speaker: announcement_mixing_input
-    sample_rate: 48000
-    bits_per_sample: 16
-
-  - platform: resampler
-    id: media_resampling_speaker
-    output_speaker: media_mixing_input
-    sample_rate: 48000
-    bits_per_sample: 16
-
 sendspin:
   id: sendspin_hub
   task_stack_in_psram: false
@@ -102,7 +96,7 @@ http_request:
 
 audio_file:
   - id: ready_sound
-    file: ${startup_sound_file}
+    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
 
 media_source:
   - platform: audio_file
@@ -128,7 +122,7 @@ media_player:
     announcement_pipeline:
       format: FLAC
       num_channels: 1
-      sample_rate: 48000
+      sample_rate: ${media_sample_rate}
       speaker: announcement_resampling_speaker
       sources:
         - audio_file_announcement_source
@@ -137,14 +131,14 @@ media_player:
     media_pipeline:
       format: FLAC
       num_channels: 2
-      sample_rate: 48000
+      sample_rate: ${media_sample_rate}
       speaker: media_resampling_speaker
       sources:
         - http_media_source
         - sendspin_media_source
     volume_increment: 0.05
     volume_min: 0.4
-    volume_max: 0.85
+    volume_max: 0.9
 
     on_state:
       then:
