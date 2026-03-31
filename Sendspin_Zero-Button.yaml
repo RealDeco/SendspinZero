@@ -1,4 +1,4 @@
-## SendspinZero for Analog + Digital Coax and Toslink versions BUTTON display. Edit the settings below.
+## SendspinZero for Analog + Digital Coax and Toslink with a BUTTON versions. Edit the settings below.
 substitutions:
   name: esphome-web-e82548
   friendly_name: Sendspin Zero Button
@@ -37,7 +37,7 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - script.execute: led_red
+      - script.execute: update_status_leds
 
 esp32:
   variant: esp32s3
@@ -78,7 +78,8 @@ external_components:
       # https://github.com/esphome/esphome/pull/14933
       type: git
       url: https://github.com/kahrendt/esphome
-      ref: 890e33f99af2c2ea15dc74c3ec4cf32d25203526
+#      ref: 890e33f99af2c2ea15dc74c3ec4cf32d25203526
+      ref: 7a6cf5c8472b7e2fa18ee0fc314f66a80d249e32
     components: [const, media_source, sendspin, generic_image]
   - source:
       # https://github.com/esphome/esphome/pull/12429
@@ -143,17 +144,7 @@ media_player:
 
     on_state:
       then:
-        - lambda: |-
-            using media_player::MediaPlayerState;
-            auto state = id(external_media_player).state;
-            if (
-              state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
-              state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
-            ) {
-              id(led_green).execute();
-            } else {
-              id(led_red).execute();
-            }
+        - script.execute: update_status_leds
 
 script:
   - id: play_sound
@@ -177,6 +168,27 @@ script:
               .perform();
           }
 
+  - id: update_status_leds
+    then:
+      - if:
+          condition:
+            lambda: 'return id(button_mode).current_option() == "HA Control";'
+          then:
+            - light.turn_on: red_status_light
+            - light.turn_on: green_status_light
+          else:
+            - lambda: |-
+                using media_player::MediaPlayerState;
+                auto state = id(external_media_player).state;
+                if (
+                  state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
+                  state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
+                ) {
+                  id(led_green).execute();
+                } else {
+                  id(led_red).execute();
+                }
+
   - id: led_red
     then:
       - light.turn_on: red_status_light
@@ -195,6 +207,27 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+
+select:
+  - platform: template
+    id: button_mode
+    name: Button Mode
+    optimistic: true
+    restore_value: true
+    initial_option: Player Control
+    options:
+      - Player Control
+      - HA Control
+    set_action:
+      - lambda: |-
+          id(button_mode).publish_state(x);
+      - script.execute: update_status_leds
+
+text_sensor:
+  - platform: template
+    id: button_action
+    name: Button Action
+    update_interval: never
 
 globals:
   - id: boot_sound_played
@@ -264,18 +297,34 @@ binary_sensor:
           - ON for at most 350ms
           - OFF for at least 351ms
         then:
-          - media_player.toggle: sendspin_group_media_player
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - media_player.toggle: sendspin_group_media_player
+              else:
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "single"
 
-      # Double click => Next track (only when PLAYING)
+      # Double click
       - timing:
           - ON for at most 350ms
           - OFF for at most 350ms
           - ON for at most 350ms
           - OFF for at least 351ms
         then:
-          - media_player.next: sendspin_group_media_player
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - media_player.next: sendspin_group_media_player
+              else:
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "double"
 
-      # Triple click => Previous track (only when PLAYING)
+      # Triple click
       - timing:
           - ON for at most 350ms
           - OFF for at most 350ms
@@ -284,10 +333,34 @@ binary_sensor:
           - ON for at most 350ms
           - OFF for at least 351ms
         then:
-          - media_player.previous: sendspin_group_media_player
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - media_player.previous: sendspin_group_media_player
+              else:
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "triple"
 
-      # Hold => phase-aware action (idle vs playing)
+      # Hold => toggle between modes
       - timing:
           - ON for at least 700ms
         then:
-          - media_player.stop: sendspin_group_media_player
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - select.set:
+                    id: button_mode
+                    option: "HA Control"
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "mode_ha"
+              else:
+                - select.set:
+                    id: button_mode
+                    option: "Player Control"
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "mode_player"
