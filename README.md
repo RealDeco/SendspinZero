@@ -2,7 +2,7 @@
 <img width="1500" height="603" alt="Screenshot 2026-03-15 at 08 15 55 copy" src="https://github.com/user-attachments/assets/cf58463a-1112-4aff-8982-a297d2f72e1a" />
 
 
-# Minimalistic Sendspin Media Player for ESPHome / Home Assistant
+# Minimalistic Sendspin Media Player for Home Assistant
 
 A tiny Sendspin media player with **cover art display** and a **weather clock**, built around the **ESP32-S3 Zero**.
 
@@ -172,6 +172,12 @@ Cords: https://www.aliexpress.com/item/1005008202856228.html
 
 Instead of display or no display, there's now a 3rd option, a big nice button with light :)
 
+Functionality: Single click_ start/stop playback, Double click: next song: Triple click: previous song.
+
+Hold: switches from sendspin control to HA control or back, and light will change to orange'ish
+
+In HA control mode the triggers are simply exposed to HA for use in automations. (single double, triple click)
+
 ![button-led](https://github.com/user-attachments/assets/58495e54-4e8d-465a-86ac-04d2dd644c3c)
 
 3D files for case is in [3D_Files](3D_Files)
@@ -190,6 +196,7 @@ Instead of display or no display, there's now a 3rd option, a big nice button wi
 ---
 
 <img width="549" height="594" alt="Screenshot 2026-03-30 at 20 38 24" src="https://github.com/user-attachments/assets/43835fa0-46af-49d7-95a4-fb2c2d7c3063" />
+
 Links to part:
 
 This low profile button is a little expensive but also VERY nice :)
