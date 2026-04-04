@@ -11,8 +11,8 @@ substitutions:
   ha_weather_entity: weather.forecast_home
 
   # Light entity or group to be controlled by the rotary knob
-   # for this to work You also need to enable “Allow the device to perform Home Assistant actions” for this ESPHome device in Home Assistant.
-  control_device: light.livingroom_all_lights
+  # for this to work You also need to enable “Allow the device to perform Home Assistant actions” for this ESPHome device in Home Assistant.
+  control_device: light.ceiling_2
   control_devicename: "All Light"
 
   # Rotating the display, uncomment the block you need (default 0 degree)
@@ -78,6 +78,8 @@ api:
             id(play_sound)->execute(true, std::string("ready_sound"));
           }
         }
+    - delay: 5s
+    - script.execute: fetch_daily_forecast
 
 ota:
   - platform: esphome
@@ -124,12 +126,12 @@ globals:
     restore_value: no
     initial_value: "false"
 
-  - id: boot_announce_active
+  - id: weather_available
     type: bool
     restore_value: no
     initial_value: "false"
 
-  - id: weather_available
+  - id: forecast_available
     type: bool
     restore_value: no
     initial_value: "false"
@@ -260,6 +262,26 @@ media_player:
         - script.execute: led_red
 
 sensor:
+  - platform: rotary_encoder
+    id: rotary_encoder_sensor
+    internal: true
+    pin_a:
+      number: GPIO12
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO13
+      mode:
+        input: true
+        pullup: true
+    resolution: 2
+    restore_mode: ALWAYS_ZERO
+    on_clockwise:
+      - script.execute: rotary_cw
+    on_anticlockwise:
+      - script.execute: rotary_ccw
+
   - platform: homeassistant
     id: ha_weather_temperature
     entity_id: ${ha_weather_entity}
@@ -269,56 +291,6 @@ sensor:
     id: ha_weather_wind_speed
     entity_id: ${ha_weather_entity}
     attribute: wind_speed
-
-  - platform: rotary_encoder
-    id: volume_knob
-    pin_a: GPIO12
-    pin_b: GPIO13
-    on_clockwise:
-      - if:
-          condition:
-            lambda: 'return id(knob_popup_active);'
-          then:
-            - lambda: |-
-                id(knob_control_pct) += 5;
-                if (id(knob_control_pct) > 100) id(knob_control_pct) = 100;
-                id(popup_mode_light) = true;
-            - script.execute: update_popup_widgets
-            - script.execute: apply_knob_to_light
-            - script.execute: popup_autoclose
-          else:
-            - lambda: |-
-                id(volume_control_pct) += 5;
-                if (id(volume_control_pct) > 100) id(volume_control_pct) = 100;
-                id(popup_mode_light) = false;
-            - media_player.volume_set:
-                id: external_media_player
-                volume: !lambda 'return id(volume_control_pct) / 100.0f;'
-            - script.execute: show_volume_popup
-            - script.execute: popup_autoclose
-
-    on_anticlockwise:
-      - if:
-          condition:
-            lambda: 'return id(knob_popup_active);'
-          then:
-            - lambda: |-
-                id(knob_control_pct) -= 5;
-                if (id(knob_control_pct) < 0) id(knob_control_pct) = 0;
-                id(popup_mode_light) = true;
-            - script.execute: update_popup_widgets
-            - script.execute: apply_knob_to_light
-            - script.execute: popup_autoclose
-          else:
-            - lambda: |-
-                id(volume_control_pct) -= 5;
-                if (id(volume_control_pct) < 0) id(volume_control_pct) = 0;
-                id(popup_mode_light) = false;
-            - media_player.volume_set:
-                id: external_media_player
-                volume: !lambda 'return id(volume_control_pct) / 100.0f;'
-            - script.execute: show_volume_popup
-            - script.execute: popup_autoclose
 
 text_sensor:
   - platform: homeassistant
@@ -331,10 +303,14 @@ text_sensor:
 
           if (c == "sunny" || c == "clear") {
             icon = "\U000F0599";
+          } else if (c == "clear-night") {
+            icon = "\U000F0594";
           } else if (c == "partlycloudy") {
             icon = "\U000F0595";
           } else if (c == "cloudy") {
             icon = "\U000F0590";
+          } else if (c == "fog") {
+            icon = "\U000F0591";
           } else if (c == "rainy") {
             icon = "\U000F0597";
           } else if (c == "pouring") {
@@ -349,6 +325,7 @@ text_sensor:
 
           lv_label_set_text(id(weather_icon_glow), icon);
           lv_label_set_text(id(weather_icon), icon);
+      - script.execute: fetch_daily_forecast
 
   - platform: homeassistant
     id: ha_weather_temperature_unit
@@ -373,7 +350,11 @@ text_sensor:
       - lambda: |-
           id(sendspin_album_art_valid) = false;
       - script.execute: album_art_timeout_fallback
-      - component.update: now_playing_text
+      - lvgl.label.update:
+          id: now_playing_title_label
+          text: !lambda |-
+            if (x.empty()) return " ";
+            return x;
 
   - platform: sendspin
     id: sendspin_artist
@@ -382,31 +363,21 @@ text_sensor:
       - lambda: |-
           id(sendspin_album_art_valid) = false;
       - script.execute: album_art_timeout_fallback
-      - component.update: now_playing_text
+      - lvgl.label.update:
+          id: now_playing_artist_label
+          text: !lambda |-
+            if (x.empty()) return " ";
+            return x;
 
   - platform: sendspin
     id: album_title
     type: album
     on_value:
-      - component.update: now_playing_text
-
-  - platform: template
-    id: now_playing_text
-    update_interval: never
-    lambda: |-
-      std::string title  = id(sendspin_title).get_state();
-      std::string artist = id(sendspin_artist).get_state();
-      std::string album  = id(album_title).get_state();
-
-      if (title.empty())  title = " ";
-      if (artist.empty()) artist = " ";
-      if (album.empty())  album = " ";
-
-      return title + "\n" + artist + "\n" + album;
-    on_value:
       - lvgl.label.update:
-          id: now_playing_label
-          text: !lambda return x;
+          id: now_playing_album_label
+          text: !lambda |-
+            if (x.empty()) return " ";
+            return x;
 
   - platform: template
     id: clock_hms
@@ -490,8 +461,22 @@ text_sensor:
       std::string wunit = id(ha_weather_wind_speed_unit).state.c_str();
       if (wunit.empty()) wunit = "m/s";
 
-      float temp_c = id(ha_weather_temperature).state;
-      float wind_ms = id(ha_weather_wind_speed).state;
+      float temp_display = id(ha_weather_temperature).state;
+      float wind_display = id(ha_weather_wind_speed).state;
+
+      float temp_c = temp_display;
+      if (tunit == "°F" || tunit == "F") {
+        temp_c = (temp_display - 32.0f) * 5.0f / 9.0f;
+      }
+
+      float wind_ms = wind_display;
+      if (wunit == "km/h" || wunit == "kmh") {
+        wind_ms = wind_display / 3.6f;
+      } else if (wunit == "mph") {
+        wind_ms = wind_display * 0.44704f;
+      } else if (wunit == "kn" || wunit == "kt" || wunit == "kts" || wunit == "knots") {
+        wind_ms = wind_display * 0.514444f;
+      }
 
       float feels_c = temp_c;
       if (temp_c <= 10.0f && wind_ms > 1.3f) {
@@ -500,12 +485,17 @@ text_sensor:
         feels_c = 13.12f + 0.6215f * temp_c - 11.37f * v16 + 0.3965f * temp_c * v16;
       }
 
+      float feels_display = feels_c;
+      if (tunit == "°F" || tunit == "F") {
+        feels_display = feels_c * 9.0f / 5.0f + 32.0f;
+      }
+
       char buf[160];
       snprintf(buf, sizeof(buf),
                "Temp: %.1f%s  -  Feels like: %.1f%s  -  Wind speed: %.1f %s",
-               temp_c, tunit.c_str(),
-               feels_c, tunit.c_str(),
-               wind_ms, wunit.c_str());
+               temp_display, tunit.c_str(),
+               feels_display, tunit.c_str(),
+               wind_display, wunit.c_str());
       return std::string(buf);
     on_value:
       - lambda: |-
@@ -533,11 +523,6 @@ text_sensor:
                   - lvgl.widget.hide: weather_header
                   - lvgl.widget.hide: weather_label
                   - lvgl.widget.hide: weather_label_glow
-
-  - platform: template
-    id: button_action
-    name: Button Action
-    update_interval: never
 
 font:
   - file:
@@ -584,6 +569,15 @@ font:
     size: 22
     glyphs: "°CF"
 
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 600
+    id: font_forecast
+    size: 14
+    glyphsets:
+      - GF_Latin_Core
+
   - file: https://raw.githubusercontent.com/rbtdev/spiroplot/master/fonts/DSEG7/Classic-MINI/DSEG7ClassicMini-Bold.ttf
     id: font_7seg
     size: 42
@@ -594,8 +588,25 @@ font:
     size: 56
     glyphs:
       - "\U000F0590"
+      - "\U000F0591"
       - "\U000F0592"
       - "\U000F0593"
+      - "\U000F0594"
+      - "\U000F0595"
+      - "\U000F0596"
+      - "\U000F0597"
+      - "\U000F0598"
+      - "\U000F0599"
+
+  - file: https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf
+    id: font_mdi_forecast
+    size: 28
+    glyphs:
+      - "\U000F0590"
+      - "\U000F0591"
+      - "\U000F0592"
+      - "\U000F0593"
+      - "\U000F0594"
       - "\U000F0595"
       - "\U000F0596"
       - "\U000F0597"
@@ -603,6 +614,190 @@ font:
       - "\U000F0599"
 
 script:
+  - id: fetch_daily_forecast
+    mode: restart
+    then:
+      - homeassistant.action:
+          action: weather.get_forecasts
+          data:
+            entity_id: ${ha_weather_entity}
+            type: daily
+          capture_response: true
+          on_success:
+            - lambda: |-
+                auto icon_for_condition = [](const std::string &condition) -> const char* {
+                  if (condition == "sunny" || condition == "clear") return "\U000F0599";
+                  if (condition == "clear-night") return "\U000F0594";
+                  if (condition == "partlycloudy") return "\U000F0595";
+                  if (condition == "cloudy") return "\U000F0590";
+                  if (condition == "fog") return "\U000F0591";
+                  if (condition == "rainy") return "\U000F0597";
+                  if (condition == "pouring") return "\U000F0596";
+                  if (condition == "snowy") return "\U000F0598";
+                  if (condition == "lightning") return "\U000F0593";
+                  if (condition == "hail") return "\U000F0592";
+                  return "\U000F0590";
+                };
+
+                auto weekday_from_iso = [](const char *iso_value, int fallback_offset) -> const char* {
+                  static const char* names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+                  if (iso_value == nullptr || iso_value[0] == '\0') {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+
+                  int year = 0;
+                  int month = 0;
+                  int day = 0;
+                  if (sscanf(iso_value, "%d-%d-%d", &year, &month, &day) != 3) {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+                  if (month < 1 || month > 12) {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+
+                  static const int offsets[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+                  if (month < 3) year -= 1;
+                  int day_index = (year + year / 4 - year / 100 + year / 400 + offsets[month - 1] + day) % 7;
+                  if (day_index < 0 || day_index > 6) {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+                  return names[day_index];
+                };
+
+                JsonArrayConst forecast = response["response"]["${ha_weather_entity}"]["forecast"].as<JsonArrayConst>();
+                if (forecast.isNull() || forecast.size() == 0) {
+                  id(forecast_available) = false;
+                  lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                  ESP_LOGW("forecast", "No daily forecast data returned for ${ha_weather_entity}");
+                  return;
+                }
+
+                lv_obj_t *day_labels[3] = {
+                  id(forecast_day_1),
+                  id(forecast_day_2),
+                  id(forecast_day_3),
+                };
+                lv_obj_t *icon_labels[3] = {
+                  id(forecast_icon_1),
+                  id(forecast_icon_2),
+                  id(forecast_icon_3),
+                };
+                lv_obj_t *temp_labels[3] = {
+                  id(forecast_temp_1),
+                  id(forecast_temp_2),
+                  id(forecast_temp_3),
+                };
+
+                size_t start_index = forecast.size() >= 4 ? 1 : 0;
+                std::string tunit = id(ha_weather_temperature_unit).state.c_str();
+                if (tunit.empty()) tunit = "°C";
+
+                bool rendered_any = false;
+                for (size_t i = 0; i < 3; i++) {
+                  size_t src_index = start_index + i;
+                  if (src_index >= forecast.size()) {
+                    lv_label_set_text(day_labels[i], "--");
+                    lv_label_set_text(icon_labels[i], "\U000F0590");
+                    lv_label_set_text(temp_labels[i], "--");
+                    continue;
+                  }
+
+                  JsonObjectConst day = forecast[src_index].as<JsonObjectConst>();
+                  const char *datetime_value = day["datetime"] | "";
+                  const char *condition_value = day["condition"] | "cloudy";
+                  float high_temp = day["temperature"] | NAN;
+                  float low_temp = day["templow"] | high_temp;
+
+                  lv_label_set_text(day_labels[i], weekday_from_iso(datetime_value, i));
+                  lv_label_set_text(icon_labels[i], icon_for_condition(std::string(condition_value)));
+
+                  if (std::isnan(high_temp)) {
+                    lv_label_set_text(temp_labels[i], "--");
+                  } else {
+                    char temp_buf[24];
+                    snprintf(
+                      temp_buf,
+                      sizeof(temp_buf),
+                      "%.0f/%.0f%s",
+                      high_temp,
+                      std::isnan(low_temp) ? high_temp : low_temp,
+                      tunit.c_str()
+                    );
+                    lv_label_set_text(temp_labels[i], temp_buf);
+                    rendered_any = true;
+                  }
+                }
+
+                id(forecast_available) = rendered_any;
+                if (rendered_any) {
+                  lv_obj_clear_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                } else {
+                  lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                }
+          on_error:
+            - lambda: |-
+                id(forecast_available) = false;
+                lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                ESP_LOGW("forecast", "weather.get_forecasts failed for ${ha_weather_entity}");
+
+  - id: rotary_cw
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(knob_popup_active);'
+          then:
+            - lambda: |-
+                id(knob_control_pct) += 5;
+                if (id(knob_control_pct) > 100) id(knob_control_pct) = 100;
+                id(popup_mode_light) = true;
+            - script.execute: update_popup_widgets
+            - script.execute: apply_knob_to_light
+          else:
+            - lambda: |-
+                if ((!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) || (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN))) {
+                  // Keep using the local step counter while the volume popup is active.
+                } else {
+                  id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                }
+                id(volume_control_pct) += 5;
+                if (id(volume_control_pct) > 100) id(volume_control_pct) = 100;
+                id(popup_mode_light) = false;
+            - media_player.volume_set:
+                id: external_media_player
+                volume: !lambda 'return id(volume_control_pct) * 0.009f;'
+            - script.execute: show_volume_popup
+            - script.execute: popup_autoclose
+
+  - id: rotary_ccw
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(knob_popup_active);'
+          then:
+            - lambda: |-
+                id(knob_control_pct) -= 5;
+                if (id(knob_control_pct) < 0) id(knob_control_pct) = 0;
+                id(popup_mode_light) = true;
+            - script.execute: update_popup_widgets
+            - script.execute: apply_knob_to_light
+          else:
+            - lambda: |-
+                if ((!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) || (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN))) {
+                  // Keep using the local step counter while the volume popup is active.
+                } else {
+                  id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                }
+                id(volume_control_pct) -= 5;
+                if (id(volume_control_pct) < 0) id(volume_control_pct) = 0;
+                id(popup_mode_light) = false;
+            - media_player.volume_set:
+                id: external_media_player
+                volume: !lambda 'return id(volume_control_pct) * 0.009f;'
+            - script.execute: show_volume_popup
+            - script.execute: popup_autoclose
+
   - id: album_art_timeout_fallback
     mode: restart
     then:
@@ -712,7 +907,6 @@ script:
             id(knob_control_pct) = 0;
           }
       - script.execute: render_popup
-      - script.execute: popup_autoclose
 
   - id: show_volume_popup
     mode: restart
@@ -776,10 +970,8 @@ script:
           condition:
             lambda: 'return sound_file == "ready_sound";'
           then:
-            - lambda: 'id(boot_announce_active) = true;'
             - delay: 2s
             - lvgl.page.show: boot_sound_page
-            - lambda: 'id(boot_announce_active) = false;'
 
       - if:
           condition:
@@ -815,6 +1007,11 @@ script:
           green: 100%
           blue: 0%
           brightness: 100%
+
+interval:
+  - interval: 10min
+    then:
+      - script.execute: fetch_daily_forecast
 
 switch:
   - platform: template
@@ -904,7 +1101,7 @@ lvgl:
       widgets:
         - obj:
             id: idle_center_block
-            align: CENTER
+            align: TOP_MID
             width: 240
             height: 230
             bg_opa: TRANSP
@@ -936,7 +1133,7 @@ lvgl:
               - obj:
                   id: weather_header
                   align: TOP_MID
-                  y: 90
+                  y: 96
                   width: 240
                   height: 70
                   bg_opa: TRANSP
@@ -984,7 +1181,7 @@ lvgl:
                   id: weather_label_glow
                   align: TOP_MID
                   x: 1
-                  y: 168
+                  y: 186
                   width: 220
                   text: "Weather..."
                   text_color: 0x1AA6C8
@@ -996,13 +1193,131 @@ lvgl:
                   id: weather_label
                   align: TOP_MID
                   x: 0
-                  y: 167
+                  y: 185
                   width: 220
                   text: "Weather..."
                   text_color: 0x66CCFF
                   text_font: font_display
                   long_mode: SCROLL_CIRCULAR
                   text_align: CENTER
+
+        - obj:
+            id: forecast_strip
+            hidden: true
+            align: BOTTOM_MID
+            y: -10
+            width: 234
+            height: 74
+            radius: 18
+            pad_top: 6
+            pad_bottom: 6
+            pad_left: 4
+            pad_right: 4
+            scrollable: false
+            bg_color: 0x000000
+            bg_opa: 35%
+            border_opa: 15%
+            border_color: 0xFFFFFF
+            border_width: 1
+            widgets:
+              - obj:
+                  align: LEFT_MID
+                  width: 74
+                  height: 62
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+                  widgets:
+                    - label:
+                        id: forecast_day_1
+                        align: TOP_MID
+                        y: -1
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_forecast
+
+                    - label:
+                        id: forecast_icon_1
+                        align: CENTER
+                        y: -1
+                        text: "\U000F0590"
+                        text_color: 0xFFFFFF
+                        text_font: font_mdi_forecast
+
+                    - label:
+                        id: forecast_temp_1
+                        align: BOTTOM_MID
+                        y: 1
+                        text: "--"
+                        text_color: 0x8EDBFF
+                        text_font: font_forecast
+
+              - obj:
+                  align: CENTER
+                  width: 74
+                  height: 62
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+                  widgets:
+                    - label:
+                        id: forecast_day_2
+                        align: TOP_MID
+                        y: -1
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_forecast
+
+                    - label:
+                        id: forecast_icon_2
+                        align: CENTER
+                        y: -1
+                        text: "\U000F0590"
+                        text_color: 0xFFFFFF
+                        text_font: font_mdi_forecast
+
+                    - label:
+                        id: forecast_temp_2
+                        align: BOTTOM_MID
+                        y: 1
+                        text: "--"
+                        text_color: 0x8EDBFF
+                        text_font: font_forecast
+
+              - obj:
+                  align: RIGHT_MID
+                  width: 74
+                  height: 62
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+                  widgets:
+                    - label:
+                        id: forecast_day_3
+                        align: TOP_MID
+                        y: -1
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_forecast
+
+                    - label:
+                        id: forecast_icon_3
+                        align: CENTER
+                        y: -1
+                        text: "\U000F0590"
+                        text_color: 0xFFFFFF
+                        text_font: font_mdi_forecast
+
+                    - label:
+                        id: forecast_temp_3
+                        align: BOTTOM_MID
+                        y: 1
+                        text: "--"
+                        text_color: 0x8EDBFF
+                        text_font: font_forecast
 
         - obj:
             id: popup_idle
@@ -1062,16 +1377,34 @@ lvgl:
             clickable: false
 
         - label:
-            id: now_playing_label
+            id: now_playing_title_label
             align: TOP_MID
             y: 224
             width: 232
-            height: 88
             text: ""
             text_color: 0xFFFFFF
-            long_mode: WRAP
+            long_mode: SCROLL_CIRCULAR
             text_align: CENTER
-            text_line_space: 6
+
+        - label:
+            id: now_playing_artist_label
+            align: TOP_MID
+            y: 254
+            width: 232
+            text: ""
+            text_color: 0xFFFFFF
+            long_mode: SCROLL_CIRCULAR
+            text_align: CENTER
+
+        - label:
+            id: now_playing_album_label
+            align: TOP_MID
+            y: 284
+            width: 232
+            text: ""
+            text_color: 0xFFFF00
+            long_mode: SCROLL_CIRCULAR
+            text_align: CENTER
 
         - obj:
             id: popup_sendspin
@@ -1123,6 +1456,8 @@ binary_sensor:
       mode: INPUT_PULLUP
       inverted: true
     id: rotary_button
+    filters:
+      - delayed_on_off: 20ms
     on_press:
       - script.execute: toggle_knob_popup
 
@@ -1132,6 +1467,8 @@ binary_sensor:
       mode: INPUT_PULLUP
       inverted: true
     id: media_button
+    filters:
+      - delayed_on_off: 20ms
     on_multi_click:
       - timing:
           - ON for at most 350ms
@@ -1139,79 +1476,21 @@ binary_sensor:
         then:
           - if:
               condition:
-                lambda: 'return id(button_mode).current_option() == "Player Control";'
-              then:
-                - media_player.toggle: sendspin_group_media_player
-              else:
-                - text_sensor.template.publish:
-                    id: button_action
-                    state: "single"
-
-      - timing:
-          - ON for at most 350ms
-          - OFF for at most 350ms
-          - ON for at most 350ms
-          - OFF for at least 351ms
-        then:
-          - if:
-              condition:
-                lambda: 'return id(button_mode).current_option() == "Player Control";'
+                media_player.is_playing: sendspin_group_media_player
               then:
                 - media_player.next: sendspin_group_media_player
               else:
-                - text_sensor.template.publish:
-                    id: button_action
-                    state: "double"
+                - media_player.play: sendspin_group_media_player
 
       - timing:
           - ON for at most 350ms
           - OFF for at most 350ms
           - ON for at most 350ms
-          - OFF for at most 350ms
-          - ON for at most 350ms
           - OFF for at least 351ms
         then:
-          - if:
-              condition:
-                lambda: 'return id(button_mode).current_option() == "Player Control";'
-              then:
-                - media_player.previous: sendspin_group_media_player
-              else:
-                - text_sensor.template.publish:
-                    id: button_action
-                    state: "triple"
+          - media_player.previous: sendspin_group_media_player
 
       - timing:
           - ON for at least 700ms
         then:
-          - if:
-              condition:
-                lambda: 'return id(button_mode).current_option() == "Player Control";'
-              then:
-                - select.set:
-                    id: button_mode
-                    option: "HA Control"
-                - text_sensor.template.publish:
-                    id: button_action
-                    state: "mode_ha"
-              else:
-                - select.set:
-                    id: button_mode
-                    option: "Player Control"
-                - text_sensor.template.publish:
-                    id: button_action
-                    state: "mode_player"
-
-select:
-  - platform: template
-    id: button_mode
-    name: Button Mode
-    optimistic: true
-    restore_value: true
-    initial_option: Player Control
-    options:
-      - Player Control
-      - HA Control
-    set_action:
-      - lambda: |-
-          id(button_mode).publish_state(x);
+          - media_player.pause: sendspin_group_media_player
