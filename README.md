@@ -232,6 +232,8 @@ This version uses a combo board with a **rotary encoder + button + display i fou
 
 ### Part
 
+ESP32-S3 Zero and PCM5102A as above +
+
 [https://www.aliexpress.com/item/1005009900611104.html](https://www.aliexpress.com/item/1005009900611104.html)
 
 ---
