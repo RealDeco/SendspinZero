@@ -233,7 +233,6 @@ This version uses a combo board with a **rotary encoder + button + display i fou
 ### Part
 
 [https://www.aliexpress.com/item/1005009900611104.html](https://www.aliexpress.com/item/1005009900611104.html)
-![Uploading Screenshot 2026-04-03 at 07.33.40.png…]()
 
 ---
 
