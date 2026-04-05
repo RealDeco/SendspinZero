@@ -12,8 +12,22 @@ substitutions:
 
   # Light entity or group to be controlled by the rotary knob
   # for this to work You also need to enable “Allow the device to perform Home Assistant actions” for this ESPHome device in Home Assistant.
-  control_device: light.ceiling_2
-  control_devicename: "All Light"
+  control_device_1: light.ceiling
+  control_devicename_1: "Ceiling 1"
+  control_device_2: light.ceiling_2
+  control_devicename_2: "Ceiling 2"
+  control_device_3: light.desklight_light
+  control_devicename_3: "Desk Light"
+  control_device_4: light.hue_p45_7_light
+  control_devicename_4: "Prt. Light"
+  control_device_5: light.hue_p45_8_light
+  control_devicename_5: "Blue Lamp"
+  control_device_6: light.livingroom_all_lights
+  control_devicename_6: "All Light"
+
+  # Home Assistant button entity triggered by normal-button triple click.
+  favorite_button_entity: button.sensspin_zero_control_favorite_current_song
+
 
   # Rotating the display, uncomment the block you need (default 0 degree)
 
@@ -156,6 +170,32 @@ globals:
     restore_value: no
     initial_value: "false"
 
+
+  - id: control_menu_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: control_menu_restore_popup
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: selected_control_index
+    type: int
+    restore_value: yes
+    initial_value: "1"
+
+  - id: control_menu_cursor
+    type: int
+    restore_value: no
+    initial_value: "1"
+
+  - id: control_menu_turn_halfstep
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
 image:
   - file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Gwen/240x240/playing.png
     id: fallback_playing_image
@@ -243,9 +283,15 @@ media_player:
         - lvgl.page.show: sendspin_page
         - if:
             condition:
-              lambda: 'return id(knob_popup_active);'
+              lambda: 'return id(control_menu_active);'
             then:
-              - script.execute: render_popup
+              - script.execute: render_control_menu
+            else:
+              - if:
+                  condition:
+                    lambda: 'return (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) || (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));'
+                  then:
+                    - script.execute: render_popup
         - script.execute: led_green
 
     on_announcement:
@@ -291,6 +337,7 @@ sensor:
     id: ha_weather_wind_speed
     entity_id: ${ha_weather_entity}
     attribute: wind_speed
+
 
 text_sensor:
   - platform: homeassistant
@@ -338,8 +385,38 @@ text_sensor:
     attribute: wind_speed_unit
 
   - platform: homeassistant
-    id: controlled_light_brightness_text
-    entity_id: ${control_device}
+    id: control_device_1_brightness_text
+    entity_id: ${control_device_1}
+    attribute: brightness
+    internal: true
+
+  - platform: homeassistant
+    id: control_device_2_brightness_text
+    entity_id: ${control_device_2}
+    attribute: brightness
+    internal: true
+
+  - platform: homeassistant
+    id: control_device_3_brightness_text
+    entity_id: ${control_device_3}
+    attribute: brightness
+    internal: true
+
+  - platform: homeassistant
+    id: control_device_4_brightness_text
+    entity_id: ${control_device_4}
+    attribute: brightness
+    internal: true
+
+  - platform: homeassistant
+    id: control_device_5_brightness_text
+    entity_id: ${control_device_5}
+    attribute: brightness
+    internal: true
+
+  - platform: homeassistant
+    id: control_device_6_brightness_text
+    entity_id: ${control_device_6}
     attribute: brightness
     internal: true
 
@@ -745,58 +822,88 @@ script:
     then:
       - if:
           condition:
-            lambda: 'return id(knob_popup_active);'
+            lambda: 'return id(control_menu_active);'
           then:
             - lambda: |-
-                id(knob_control_pct) += 5;
-                if (id(knob_control_pct) > 100) id(knob_control_pct) = 100;
-                id(popup_mode_light) = true;
-            - script.execute: update_popup_widgets
-            - script.execute: apply_knob_to_light
-          else:
-            - lambda: |-
-                if ((!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) || (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN))) {
-                  // Keep using the local step counter while the volume popup is active.
-                } else {
-                  id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                if (id(control_menu_turn_halfstep)) {
+                  id(control_menu_cursor) -= 1;
+                  if (id(control_menu_cursor) < 1) id(control_menu_cursor) = 6;
                 }
-                id(volume_control_pct) += 5;
-                if (id(volume_control_pct) > 100) id(volume_control_pct) = 100;
-                id(popup_mode_light) = false;
-            - media_player.volume_set:
-                id: external_media_player
-                volume: !lambda 'return id(volume_control_pct) * 0.009f;'
-            - script.execute: show_volume_popup
-            - script.execute: popup_autoclose
+                id(control_menu_turn_halfstep) = !id(control_menu_turn_halfstep);
+            - script.execute: render_control_menu
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(knob_popup_active);'
+                then:
+                  - lambda: |-
+                      id(knob_control_pct) += 5;
+                      if (id(knob_control_pct) > 100) id(knob_control_pct) = 100;
+                      id(popup_mode_light) = true;
+                  - script.execute: update_popup_widgets
+                  - script.execute: apply_knob_to_light
+                else:
+                  - lambda: |-
+                      const bool popup_visible =
+                        (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) ||
+                        (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));
+                      if (popup_visible) {
+                        // Keep using the local step counter while the volume popup is active.
+                      } else {
+                        id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                      }
+                      id(volume_control_pct) += 5;
+                      if (id(volume_control_pct) > 100) id(volume_control_pct) = 100;
+                      id(popup_mode_light) = false;
+                  - media_player.volume_set:
+                      id: external_media_player
+                      volume: !lambda 'return id(volume_control_pct) * 0.009f;'
+                  - script.execute: show_volume_popup
+                  - script.execute: popup_autoclose
 
   - id: rotary_ccw
     mode: restart
     then:
       - if:
           condition:
-            lambda: 'return id(knob_popup_active);'
+            lambda: 'return id(control_menu_active);'
           then:
             - lambda: |-
-                id(knob_control_pct) -= 5;
-                if (id(knob_control_pct) < 0) id(knob_control_pct) = 0;
-                id(popup_mode_light) = true;
-            - script.execute: update_popup_widgets
-            - script.execute: apply_knob_to_light
-          else:
-            - lambda: |-
-                if ((!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) || (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN))) {
-                  // Keep using the local step counter while the volume popup is active.
-                } else {
-                  id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                if (id(control_menu_turn_halfstep)) {
+                  id(control_menu_cursor) += 1;
+                  if (id(control_menu_cursor) > 6) id(control_menu_cursor) = 1;
                 }
-                id(volume_control_pct) -= 5;
-                if (id(volume_control_pct) < 0) id(volume_control_pct) = 0;
-                id(popup_mode_light) = false;
-            - media_player.volume_set:
-                id: external_media_player
-                volume: !lambda 'return id(volume_control_pct) * 0.009f;'
-            - script.execute: show_volume_popup
-            - script.execute: popup_autoclose
+                id(control_menu_turn_halfstep) = !id(control_menu_turn_halfstep);
+            - script.execute: render_control_menu
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(knob_popup_active);'
+                then:
+                  - lambda: |-
+                      id(knob_control_pct) -= 5;
+                      if (id(knob_control_pct) < 0) id(knob_control_pct) = 0;
+                      id(popup_mode_light) = true;
+                  - script.execute: update_popup_widgets
+                  - script.execute: apply_knob_to_light
+                else:
+                  - lambda: |-
+                      const bool popup_visible =
+                        (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) ||
+                        (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));
+                      if (popup_visible) {
+                        // Keep using the local step counter while the volume popup is active.
+                      } else {
+                        id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                      }
+                      id(volume_control_pct) -= 5;
+                      if (id(volume_control_pct) < 0) id(volume_control_pct) = 0;
+                      id(popup_mode_light) = false;
+                  - media_player.volume_set:
+                      id: external_media_player
+                      volume: !lambda 'return id(volume_control_pct) * 0.009f;'
+                  - script.execute: show_volume_popup
+                  - script.execute: popup_autoclose
 
   - id: album_art_timeout_fallback
     mode: restart
@@ -822,9 +929,15 @@ script:
             - lvgl.page.show: idle_page
             - if:
                 condition:
-                  lambda: 'return id(knob_popup_active);'
+                  lambda: 'return id(control_menu_active);'
                 then:
-                  - script.execute: render_popup
+                  - script.execute: render_control_menu
+                else:
+                  - if:
+                      condition:
+                        lambda: 'return (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) || (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));'
+                      then:
+                        - script.execute: render_popup
             - script.execute: led_red
 
   - id: popup_autoclose
@@ -842,7 +955,13 @@ script:
           then:
             - lvgl.label.update:
                 id: popup_title_idle
-                text: "${control_devicename}"
+                text: !lambda |-
+                  if (id(selected_control_index) == 2) return std::string("${control_devicename_2}");
+                  if (id(selected_control_index) == 3) return std::string("${control_devicename_3}");
+                  if (id(selected_control_index) == 4) return std::string("${control_devicename_4}");
+                  if (id(selected_control_index) == 5) return std::string("${control_devicename_5}");
+                  if (id(selected_control_index) == 6) return std::string("${control_devicename_6}");
+                  return std::string("${control_devicename_1}");
             - lvgl.slider.update:
                 id: popup_slider_idle
                 value: !lambda |-
@@ -850,7 +969,13 @@ script:
 
             - lvgl.label.update:
                 id: popup_title_sendspin
-                text: "${control_devicename}"
+                text: !lambda |-
+                  if (id(selected_control_index) == 2) return std::string("${control_devicename_2}");
+                  if (id(selected_control_index) == 3) return std::string("${control_devicename_3}");
+                  if (id(selected_control_index) == 4) return std::string("${control_devicename_4}");
+                  if (id(selected_control_index) == 5) return std::string("${control_devicename_5}");
+                  if (id(selected_control_index) == 6) return std::string("${control_devicename_6}");
+                  return std::string("${control_devicename_1}");
             - lvgl.slider.update:
                 id: popup_slider_sendspin
                 value: !lambda |-
@@ -896,8 +1021,24 @@ script:
       - lambda: |-
           id(knob_popup_active) = true;
           id(popup_mode_light) = true;
+          if (id(selected_control_index) < 1 || id(selected_control_index) > 6) {
+            id(selected_control_index) = 1;
+          }
 
-          std::string bri_s = id(controlled_light_brightness_text).state;
+          std::string bri_s;
+          if (id(selected_control_index) == 2) {
+            bri_s = id(control_device_2_brightness_text).state;
+          } else if (id(selected_control_index) == 3) {
+            bri_s = id(control_device_3_brightness_text).state;
+          } else if (id(selected_control_index) == 4) {
+            bri_s = id(control_device_4_brightness_text).state;
+          } else if (id(selected_control_index) == 5) {
+            bri_s = id(control_device_5_brightness_text).state;
+          } else if (id(selected_control_index) == 6) {
+            bri_s = id(control_device_6_brightness_text).state;
+          } else {
+            bri_s = id(control_device_1_brightness_text).state;
+          }
           if (!bri_s.empty() && bri_s != "None" && bri_s != "unknown" && bri_s != "unavailable") {
             int bri = atoi(bri_s.c_str());
             if (bri < 0) bri = 0;
@@ -914,7 +1055,13 @@ script:
       - lambda: |-
           id(knob_popup_active) = false;
           id(popup_mode_light) = false;
+          id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
       - script.execute: render_popup
+
+  - id: show_selected_control_popup
+    mode: restart
+    then:
+      - script.execute: show_knob_popup
 
   - id: hide_popup
     mode: restart
@@ -925,16 +1072,105 @@ script:
       - lvgl.widget.hide: popup_idle
       - lvgl.widget.hide: popup_sendspin
 
-  - id: toggle_knob_popup
+  - id: toggle_selected_control_popup
     mode: restart
     then:
       - if:
           condition:
-            lambda: 'return id(knob_popup_active);'
+            lambda: 'return (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) || (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));'
           then:
             - script.execute: hide_popup
           else:
-            - script.execute: show_knob_popup
+            - script.execute: show_selected_control_popup
+
+  - id: render_control_menu
+    mode: restart
+    then:
+      - lambda: |-
+          const char *labels[6] = {
+            "${control_devicename_1}",
+            "${control_devicename_2}",
+            "${control_devicename_3}",
+            "${control_devicename_4}",
+            "${control_devicename_5}",
+            "${control_devicename_6}",
+          };
+          lv_obj_t *idle_items[6] = {
+            id(control_menu_idle_item_1),
+            id(control_menu_idle_item_2),
+            id(control_menu_idle_item_3),
+            id(control_menu_idle_item_4),
+            id(control_menu_idle_item_5),
+            id(control_menu_idle_item_6),
+          };
+          lv_obj_t *sendspin_items[6] = {
+            id(control_menu_sendspin_item_1),
+            id(control_menu_sendspin_item_2),
+            id(control_menu_sendspin_item_3),
+            id(control_menu_sendspin_item_4),
+            id(control_menu_sendspin_item_5),
+            id(control_menu_sendspin_item_6),
+          };
+
+          for (int i = 0; i < 6; i++) {
+            const bool selected = ((i + 1) == id(control_menu_cursor));
+            char item_text[64];
+            snprintf(item_text, sizeof(item_text), "%s%s", selected ? "> " : "  ", labels[i]);
+            lv_label_set_text(idle_items[i], item_text);
+            lv_label_set_text(sendspin_items[i], item_text);
+            lv_color_t item_color = lv_color_hex(selected ? 0x66CCFF : 0xFFFFFF);
+            lv_obj_set_style_text_color(idle_items[i], item_color, LV_PART_MAIN);
+            lv_obj_set_style_text_color(sendspin_items[i], item_color, LV_PART_MAIN);
+          }
+      - if:
+          condition:
+            lvgl.page.is_showing: idle_page
+          then:
+            - lvgl.widget.show: control_menu_idle
+            - lvgl.widget.hide: control_menu_sendspin
+          else:
+            - if:
+                condition:
+                  lvgl.page.is_showing: sendspin_page
+                then:
+                  - lvgl.widget.show: control_menu_sendspin
+                  - lvgl.widget.hide: control_menu_idle
+
+  - id: hide_control_menu
+    mode: restart
+    then:
+      - lambda: |-
+          id(control_menu_active) = false;
+      - lvgl.widget.hide: control_menu_idle
+      - lvgl.widget.hide: control_menu_sendspin
+
+  - id: show_control_menu
+    mode: restart
+    then:
+      - lambda: |-
+          id(control_menu_active) = true;
+          if (id(selected_control_index) < 1 || id(selected_control_index) > 6) {
+            id(selected_control_index) = 1;
+          }
+          id(control_menu_cursor) = id(selected_control_index);
+          id(control_menu_turn_halfstep) = false;
+          id(control_menu_restore_popup) =
+            (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) ||
+            (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));
+      - script.execute: hide_popup
+      - script.execute: render_control_menu
+
+  - id: select_control_menu_item
+    mode: restart
+    then:
+      - lambda: |-
+          id(selected_control_index) = id(control_menu_cursor);
+      - script.execute: hide_control_menu
+      - if:
+          condition:
+            lambda: 'return id(control_menu_restore_popup);'
+          then:
+            - script.execute: show_selected_control_popup
 
   - id: apply_knob_to_light
     mode: restart
@@ -943,23 +1179,153 @@ script:
           condition:
             lambda: 'return id(knob_control_pct) <= 0;'
           then:
-            - homeassistant.action:
-                action: light.turn_off
-                data:
-                  entity_id: ${control_device}
+            - if:
+                condition:
+                  lambda: 'return id(selected_control_index) == 2;'
+                then:
+                  - homeassistant.action:
+                      action: light.turn_off
+                      data:
+                        entity_id: ${control_device_2}
+                else:
+                  - if:
+                      condition:
+                        lambda: 'return id(selected_control_index) == 3;'
+                      then:
+                        - homeassistant.action:
+                            action: light.turn_off
+                            data:
+                              entity_id: ${control_device_3}
+                      else:
+                        - if:
+                            condition:
+                              lambda: 'return id(selected_control_index) == 4;'
+                            then:
+                              - homeassistant.action:
+                                  action: light.turn_off
+                                  data:
+                                    entity_id: ${control_device_4}
+                            else:
+                              - if:
+                                  condition:
+                                    lambda: 'return id(selected_control_index) == 5;'
+                                  then:
+                                    - homeassistant.action:
+                                        action: light.turn_off
+                                        data:
+                                          entity_id: ${control_device_5}
+                                  else:
+                                    - if:
+                                        condition:
+                                          lambda: 'return id(selected_control_index) == 6;'
+                                        then:
+                                          - homeassistant.action:
+                                              action: light.turn_off
+                                              data:
+                                                entity_id: ${control_device_6}
+                                        else:
+                                          - homeassistant.action:
+                                              action: light.turn_off
+                                              data:
+                                                entity_id: ${control_device_1}
           else:
-            - homeassistant.action:
-                action: light.turn_on
-                data:
-                  entity_id: ${control_device}
-                data_template:
-                  brightness: "{{ brightness_value }}"
-                variables:
-                  brightness_value: |-
-                    int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
-                    if (bri < 1) bri = 1;
-                    if (bri > 255) bri = 255;
-                    return bri;
+            - if:
+                condition:
+                  lambda: 'return id(selected_control_index) == 2;'
+                then:
+                  - homeassistant.action:
+                      action: light.turn_on
+                      data:
+                        entity_id: ${control_device_2}
+                      data_template:
+                        brightness: "{{ brightness_value }}"
+                      variables:
+                        brightness_value: |-
+                          int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
+                          if (bri < 1) bri = 1;
+                          if (bri > 255) bri = 255;
+                          return bri;
+                else:
+                  - if:
+                      condition:
+                        lambda: 'return id(selected_control_index) == 3;'
+                      then:
+                        - homeassistant.action:
+                            action: light.turn_on
+                            data:
+                              entity_id: ${control_device_3}
+                            data_template:
+                              brightness: "{{ brightness_value }}"
+                            variables:
+                              brightness_value: |-
+                                int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
+                                if (bri < 1) bri = 1;
+                                if (bri > 255) bri = 255;
+                                return bri;
+                      else:
+                        - if:
+                            condition:
+                              lambda: 'return id(selected_control_index) == 4;'
+                            then:
+                              - homeassistant.action:
+                                  action: light.turn_on
+                                  data:
+                                    entity_id: ${control_device_4}
+                                  data_template:
+                                    brightness: "{{ brightness_value }}"
+                                  variables:
+                                    brightness_value: |-
+                                      int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
+                                      if (bri < 1) bri = 1;
+                                      if (bri > 255) bri = 255;
+                                      return bri;
+                            else:
+                              - if:
+                                  condition:
+                                    lambda: 'return id(selected_control_index) == 5;'
+                                  then:
+                                    - homeassistant.action:
+                                        action: light.turn_on
+                                        data:
+                                          entity_id: ${control_device_5}
+                                        data_template:
+                                          brightness: "{{ brightness_value }}"
+                                        variables:
+                                          brightness_value: |-
+                                            int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
+                                            if (bri < 1) bri = 1;
+                                            if (bri > 255) bri = 255;
+                                            return bri;
+                                  else:
+                                    - if:
+                                        condition:
+                                          lambda: 'return id(selected_control_index) == 6;'
+                                        then:
+                                          - homeassistant.action:
+                                              action: light.turn_on
+                                              data:
+                                                entity_id: ${control_device_6}
+                                              data_template:
+                                                brightness: "{{ brightness_value }}"
+                                              variables:
+                                                brightness_value: |-
+                                                  int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
+                                                  if (bri < 1) bri = 1;
+                                                  if (bri > 255) bri = 255;
+                                                  return bri;
+                                        else:
+                                          - homeassistant.action:
+                                              action: light.turn_on
+                                              data:
+                                                entity_id: ${control_device_1}
+                                              data_template:
+                                                brightness: "{{ brightness_value }}"
+                                              variables:
+                                                brightness_value: |-
+                                                  int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
+                                                  if (bri < 1) bri = 1;
+                                                  if (bri > 255) bri = 255;
+                                                  return bri;
 
   - id: play_sound
     parameters:
@@ -1362,6 +1728,79 @@ lvgl:
                     radius: 10
                     pad_all: 8
 
+        - obj:
+            id: control_menu_idle
+            hidden: true
+            align: CENTER
+            width: 220
+            height: 250
+            radius: 18
+            pad_top: 12
+            pad_bottom: 12
+            pad_left: 12
+            pad_right: 12
+            scrollable: false
+            bg_color: 0x202020
+            bg_opa: COVER
+            border_color: 0x66CCFF
+            border_width: 2
+            widgets:
+              - label:
+                  align: TOP_MID
+                  y: 0
+                  width: 196
+                  text: "Select Control"
+                  text_color: 0xFFFF00
+                  text_align: CENTER
+
+              - label:
+                  id: control_menu_idle_item_1
+                  align: TOP_LEFT
+                  y: 38
+                  width: 196
+                  text: "> ${control_devicename_1}"
+                  text_color: 0x66CCFF
+
+              - label:
+                  id: control_menu_idle_item_2
+                  align: TOP_LEFT
+                  y: 66
+                  width: 196
+                  text: "  ${control_devicename_2}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_idle_item_3
+                  align: TOP_LEFT
+                  y: 94
+                  width: 196
+                  text: "  ${control_devicename_3}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_idle_item_4
+                  align: TOP_LEFT
+                  y: 122
+                  width: 196
+                  text: "  ${control_devicename_4}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_idle_item_5
+                  align: TOP_LEFT
+                  y: 150
+                  width: 196
+                  text: "  ${control_devicename_5}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_idle_item_6
+                  align: TOP_LEFT
+                  y: 178
+                  width: 196
+                  text: "  ${control_devicename_6}"
+                  text_color: 0xFFFFFF
+
     - id: sendspin_page
       bg_color: 0x000000
       widgets:
@@ -1449,6 +1888,79 @@ lvgl:
                     radius: 10
                     pad_all: 8
 
+        - obj:
+            id: control_menu_sendspin
+            hidden: true
+            align: CENTER
+            width: 220
+            height: 250
+            radius: 18
+            pad_top: 12
+            pad_bottom: 12
+            pad_left: 12
+            pad_right: 12
+            scrollable: false
+            bg_color: 0x202020
+            bg_opa: COVER
+            border_color: 0x66CCFF
+            border_width: 2
+            widgets:
+              - label:
+                  align: TOP_MID
+                  y: 0
+                  width: 196
+                  text: "Select Control"
+                  text_color: 0xFFFF00
+                  text_align: CENTER
+
+              - label:
+                  id: control_menu_sendspin_item_1
+                  align: TOP_LEFT
+                  y: 38
+                  width: 196
+                  text: "> ${control_devicename_1}"
+                  text_color: 0x66CCFF
+
+              - label:
+                  id: control_menu_sendspin_item_2
+                  align: TOP_LEFT
+                  y: 66
+                  width: 196
+                  text: "  ${control_devicename_2}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_sendspin_item_3
+                  align: TOP_LEFT
+                  y: 94
+                  width: 196
+                  text: "  ${control_devicename_3}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_sendspin_item_4
+                  align: TOP_LEFT
+                  y: 122
+                  width: 196
+                  text: "  ${control_devicename_4}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_sendspin_item_5
+                  align: TOP_LEFT
+                  y: 150
+                  width: 196
+                  text: "  ${control_devicename_5}"
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: control_menu_sendspin_item_6
+                  align: TOP_LEFT
+                  y: 178
+                  width: 196
+                  text: "  ${control_devicename_6}"
+                  text_color: 0xFFFFFF
+
 binary_sensor:
   - platform: gpio
     pin:
@@ -1458,8 +1970,23 @@ binary_sensor:
     id: rotary_button
     filters:
       - delayed_on_off: 20ms
-    on_press:
-      - script.execute: toggle_knob_popup
+    on_multi_click:
+      - timing:
+          - ON for at most 350ms
+          - OFF for at least 50ms
+        then:
+          - if:
+              condition:
+                lambda: 'return id(control_menu_active);'
+              then:
+                - script.execute: select_control_menu_item
+              else:
+                - script.execute: toggle_selected_control_popup
+
+      - timing:
+          - ON for at least 700ms
+        then:
+          - script.execute: show_control_menu
 
   - platform: gpio
     pin:
@@ -1489,6 +2016,19 @@ binary_sensor:
           - OFF for at least 351ms
         then:
           - media_player.previous: sendspin_group_media_player
+
+      - timing:
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at least 351ms
+        then:
+          - homeassistant.action:
+              action: button.press
+              data:
+                entity_id: ${favorite_button_entity}
 
       - timing:
           - ON for at least 700ms
