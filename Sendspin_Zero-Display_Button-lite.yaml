@@ -1,0 +1,1391 @@
+substitutions:
+  name: esphome-web-f084b8
+  friendly_name: Sendspin Zero Display Button
+
+  ha_weather_entity: weather.forecast_home
+  ha_media_player_entity: media_player.mom_s_speakers
+
+  media_name_1: "Neil Diamond"
+  media_url_1: "library://playlist/72"
+  media_name_2: "Tommy Steele"
+  media_url_2: "library://playlist/68"
+  media_name_3: "Carpenters"
+  media_url_3: "library://playlist/76"
+  media_name_4: "Random Mix"
+  media_url_4: "library://playlist/77"
+  media_name_5: "Radio: P5"
+  media_url_5: "https://drliveradio1.akamaized.net/hls/live/2097651/p5fyn/masterab.m3u8"
+  media_name_6: "Radio Vinyl"
+  media_url_6: "https://live-bauerdk.sharp-stream.com/Vinyl_dk.mp3"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.3.0
+  name_add_mac_suffix: false
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: update_status_leds
+      - script.execute: update_weather_display
+      - lvgl.page.show: idle_page
+
+esp32:
+  variant: esp32s3
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+  level: WARN
+
+api:
+  on_client_connected:
+    - delay: 5s
+    - script.execute: update_weather_display
+    - script.execute: fetch_daily_forecast
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    password: "RZ7D3EzJdPM6"
+
+psram:
+  mode: quad
+  speed: 80MHz
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/kahrendt/esphome
+      ref: 890e33f99af2c2ea15dc74c3ec4cf32d25203526
+    components: [const, sendspin, generic_image]
+
+globals:
+  - id: sendspin_album_art_valid
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: media_menu_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: media_menu_index
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: selected_media_name
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: selected_media_url
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: menu_button_hold_fired
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: menu_button_wait_for_release
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+image:
+  - file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Gwen/240x240/playing.png
+    id: fallback_playing_image
+    resize: 170x170
+    type: RGB565
+    dither: NONE
+
+generic_image:
+  - platform: sendspin
+    id: sendspin_album_art
+    format: jpg
+    type: RGB565
+    resize: 170x170
+    image_source: ALBUM
+    on_image_decoded:
+      - script.stop: album_art_timeout_fallback
+      - lambda: |-
+          id(sendspin_album_art_valid) = true;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: sendspin_album_art
+    on_image_error:
+      - script.stop: album_art_timeout_fallback
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: fallback_playing_image
+
+sendspin:
+  id: sendspin_hub
+  task_stack_in_psram: false
+
+media_player:
+  - platform: sendspin
+    id: sendspin_group_media_player
+    name: Sendspin Group Media Player
+
+    on_play:
+      then:
+        - script.stop: mp_idle_debounce
+        - lvgl.page.show: sendspin_page
+        - script.execute: led_green
+
+    on_announcement:
+      then:
+        - script.execute: led_green
+
+    on_idle:
+      then:
+        - script.execute: mp_idle_debounce
+        - script.execute: led_red
+
+    on_pause:
+      then:
+        - script.execute: led_red
+
+    on_state:
+      then:
+        - script.execute: update_status_leds
+
+sensor:
+  - platform: homeassistant
+    id: ha_weather_temperature
+    entity_id: ${ha_weather_entity}
+    attribute: temperature
+    on_value:
+      - script.execute: update_weather_display
+
+  - platform: homeassistant
+    id: ha_weather_wind_speed
+    entity_id: ${ha_weather_entity}
+    attribute: wind_speed
+    on_value:
+      - script.execute: update_weather_display
+
+text_sensor:
+  - platform: homeassistant
+    id: ha_weather_condition
+    entity_id: ${ha_weather_entity}
+    on_value:
+      - lambda: |-
+          const char* icon = "\U000F0590";
+          auto c = x;
+
+          if (c == "sunny" || c == "clear") {
+            icon = "\U000F0599";
+          } else if (c == "clear-night") {
+            icon = "\U000F0594";
+          } else if (c == "partlycloudy") {
+            icon = "\U000F0595";
+          } else if (c == "cloudy") {
+            icon = "\U000F0590";
+          } else if (c == "fog") {
+            icon = "\U000F0591";
+          } else if (c == "rainy") {
+            icon = "\U000F0597";
+          } else if (c == "pouring") {
+            icon = "\U000F0596";
+          } else if (c == "snowy") {
+            icon = "\U000F0598";
+          } else if (c == "lightning") {
+            icon = "\U000F0593";
+          } else if (c == "hail") {
+            icon = "\U000F0592";
+          }
+
+          lv_label_set_text(id(weather_icon_glow), icon);
+          lv_label_set_text(id(weather_icon), icon);
+      - script.execute: update_weather_display
+      - script.execute: fetch_daily_forecast
+
+  - platform: homeassistant
+    id: ha_weather_temperature_unit
+    entity_id: ${ha_weather_entity}
+    attribute: temperature_unit
+    on_value:
+      - script.execute: update_weather_display
+
+  - platform: homeassistant
+    id: ha_weather_wind_speed_unit
+    entity_id: ${ha_weather_entity}
+    attribute: wind_speed_unit
+    on_value:
+      - script.execute: update_weather_display
+
+  - platform: sendspin
+    id: sendspin_title
+    type: title
+    on_value:
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: fallback_playing_image
+      - script.execute: album_art_timeout_fallback
+      - lvgl.label.update:
+          id: now_playing_title_label
+          text: !lambda |-
+            if (x.empty()) return std::string(" ");
+            return x;
+
+  - platform: sendspin
+    id: sendspin_artist
+    type: artist
+    on_value:
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: fallback_playing_image
+      - script.execute: album_art_timeout_fallback
+      - lvgl.label.update:
+          id: now_playing_artist_label
+          text: !lambda |-
+            if (x.empty()) return std::string(" ");
+            return x;
+
+  - platform: sendspin
+    id: sendspin_album
+    type: album
+    on_value:
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: fallback_playing_image
+      - script.execute: album_art_timeout_fallback
+      - lvgl.label.update:
+          id: now_playing_album_label
+          text: !lambda |-
+            if (x.empty()) return std::string(" ");
+            return x;
+
+  - platform: template
+    id: clock_hms
+    update_interval: 1s
+    lambda: |-
+      auto t = id(homeassistant_time).now();
+      if (!t.is_valid()) return std::string("--:--:--");
+      bool hide_colons = ((t.second % 2) == 0);
+      char buf[9];
+      if (hide_colons) snprintf(buf, sizeof(buf), "%02d %02d %02d", t.hour, t.minute, t.second);
+      else snprintf(buf, sizeof(buf), "%02d:%02d:%02d", t.hour, t.minute, t.second);
+      return std::string(buf);
+    on_value:
+      - if:
+          condition:
+            lvgl.page.is_showing: idle_page
+          then:
+            - lvgl.label.update:
+                id: clock_label
+                text: !lambda return x;
+
+  - platform: template
+    id: clock_date
+    update_interval: 30s
+    lambda: |-
+      auto t = id(homeassistant_time).now();
+      if (!t.is_valid()) return std::string("------");
+
+      static const char* months[] = {
+        "January","February","March","April","May","June",
+        "July","August","September","October","November","December"
+      };
+
+      const char* mon = (t.month >= 1 && t.month <= 12) ? months[t.month - 1] : "???";
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%d %s", t.day_of_month, mon);
+      return std::string(buf);
+    on_value:
+      - if:
+          condition:
+            lvgl.page.is_showing: idle_page
+          then:
+            - lvgl.label.update:
+                id: date_label
+                text: !lambda return x;
+
+font:
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+    id: font_display
+    size: 16
+    glyphsets:
+      - GF_Latin_Core
+      - GF_Cyrillic_Core
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 300
+    id: font_date
+    size: 16
+    glyphsets:
+      - GF_Latin_Core
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 600
+    id: font_boot
+    size: 28
+    glyphsets:
+      - GF_Latin_Core
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 600
+    id: font_menu
+    size: 20
+    glyphsets:
+      - GF_Latin_Core
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 700
+    id: font_temp_big
+    size: 34
+    glyphs: "0123456789-"
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 700
+    id: font_temp_unit
+    size: 16
+    glyphs: "°CF-"
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 600
+    id: font_forecast
+    size: 14
+    glyphs: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz /:-°'
+
+  - file: https://raw.githubusercontent.com/rbtdev/spiroplot/master/fonts/DSEG7/Classic-MINI/DSEG7ClassicMini-Bold.ttf
+    id: font_7seg
+    size: 30
+    glyphs: "0123456789:- "
+
+  - file: https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf
+    id: font_mdi_weather
+    size: 34
+    glyphs:
+      - "\U000F0590"
+      - "\U000F0591"
+      - "\U000F0592"
+      - "\U000F0593"
+      - "\U000F0594"
+      - "\U000F0595"
+      - "\U000F0596"
+      - "\U000F0597"
+      - "\U000F0598"
+      - "\U000F0599"
+
+  - file: https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf
+    id: font_mdi_forecast
+    size: 22
+    glyphs:
+      - "\U000F0590"
+      - "\U000F0591"
+      - "\U000F0592"
+      - "\U000F0593"
+      - "\U000F0594"
+      - "\U000F0595"
+      - "\U000F0596"
+      - "\U000F0597"
+      - "\U000F0598"
+      - "\U000F0599"
+
+script:
+  - id: fetch_daily_forecast
+    mode: restart
+    then:
+      - homeassistant.action:
+          action: weather.get_forecasts
+          data:
+            entity_id: ${ha_weather_entity}
+            type: daily
+          capture_response: true
+          on_success:
+            - lambda: |-
+                auto icon_for_condition = [](const std::string &condition) -> const char* {
+                  if (condition == "sunny" || condition == "clear") return "\U000F0599";
+                  if (condition == "clear-night") return "\U000F0594";
+                  if (condition == "partlycloudy") return "\U000F0595";
+                  if (condition == "cloudy") return "\U000F0590";
+                  if (condition == "fog") return "\U000F0591";
+                  if (condition == "rainy") return "\U000F0597";
+                  if (condition == "pouring") return "\U000F0596";
+                  if (condition == "snowy") return "\U000F0598";
+                  if (condition == "lightning") return "\U000F0593";
+                  if (condition == "hail") return "\U000F0592";
+                  return "\U000F0590";
+                };
+
+                auto weekday_from_iso = [](const char *iso_value, int fallback_offset) -> const char* {
+                  static const char* names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+                  if (iso_value == nullptr || iso_value[0] == '\0') {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+
+                  int year = 0;
+                  int month = 0;
+                  int day = 0;
+                  if (sscanf(iso_value, "%d-%d-%d", &year, &month, &day) != 3) {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+                  if (month < 1 || month > 12) {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+
+                  static const int offsets[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+                  if (month < 3) year -= 1;
+                  int day_index = (year + year / 4 - year / 100 + year / 400 + offsets[month - 1] + day) % 7;
+                  if (day_index < 0 || day_index > 6) {
+                    return names[(fallback_offset + 1) % 7];
+                  }
+                  return names[day_index];
+                };
+
+                JsonArrayConst forecast = response["response"]["${ha_weather_entity}"]["forecast"].as<JsonArrayConst>();
+                if (forecast.isNull() || forecast.size() == 0) {
+                  lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                  ESP_LOGW("forecast", "No daily forecast data returned for ${ha_weather_entity}");
+                  return;
+                }
+
+                lv_obj_t *day_labels[3] = {
+                  id(forecast_day_1),
+                  id(forecast_day_2),
+                  id(forecast_day_3),
+                };
+                lv_obj_t *icon_labels[3] = {
+                  id(forecast_icon_1),
+                  id(forecast_icon_2),
+                  id(forecast_icon_3),
+                };
+                lv_obj_t *temp_labels[3] = {
+                  id(forecast_temp_1),
+                  id(forecast_temp_2),
+                  id(forecast_temp_3),
+                };
+
+                size_t start_index = forecast.size() >= 4 ? 1 : 0;
+                std::string tunit = id(ha_weather_temperature_unit).state.c_str();
+                if (tunit.empty()) tunit = "°C";
+
+                bool rendered_any = false;
+                for (size_t i = 0; i < 3; i++) {
+                  size_t src_index = start_index + i;
+                  if (src_index >= forecast.size()) {
+                    lv_label_set_text(day_labels[i], "--");
+                    lv_label_set_text(icon_labels[i], "\U000F0590");
+                    lv_label_set_text(temp_labels[i], "--");
+                    continue;
+                  }
+
+                  JsonObjectConst day = forecast[src_index].as<JsonObjectConst>();
+                  const char *datetime_value = day["datetime"] | "";
+                  const char *condition_value = day["condition"] | "cloudy";
+                  float high_temp = day["temperature"] | NAN;
+                  float low_temp = day["templow"] | high_temp;
+
+                  lv_label_set_text(day_labels[i], weekday_from_iso(datetime_value, i));
+                  lv_label_set_text(icon_labels[i], icon_for_condition(std::string(condition_value)));
+
+                  if (std::isnan(high_temp)) {
+                    lv_label_set_text(temp_labels[i], "--");
+                  } else {
+                    char temp_buf[24];
+                    snprintf(
+                      temp_buf,
+                      sizeof(temp_buf),
+                      "%.0f/%.0f%s",
+                      high_temp,
+                      std::isnan(low_temp) ? high_temp : low_temp,
+                      tunit.c_str()
+                    );
+                    lv_label_set_text(temp_labels[i], temp_buf);
+                    rendered_any = true;
+                  }
+                }
+
+                if (rendered_any) {
+                  lv_obj_clear_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                } else {
+                  lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                }
+          on_error:
+            - lambda: |-
+                lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                ESP_LOGW("forecast", "weather.get_forecasts failed for ${ha_weather_entity}");
+
+  - id: update_weather_display
+    mode: restart
+    then:
+      - lambda: |-
+          if (!id(ha_weather_temperature).has_state()) {
+            lv_obj_add_flag(id(weather_header), LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(id(weather_big_temp), "--");
+            lv_label_set_text(id(weather_big_temp_unit), "°C");
+            lv_label_set_text(id(weather_feels_like), "--");
+            return;
+          }
+
+          lv_obj_clear_flag(id(weather_header), LV_OBJ_FLAG_HIDDEN);
+
+          std::string tunit = id(ha_weather_temperature_unit).state.c_str();
+          if (tunit.empty()) tunit = "°C";
+
+          int ti = (int) lroundf(id(ha_weather_temperature).state);
+          char temp_buf[8];
+          snprintf(temp_buf, sizeof(temp_buf), "%d", ti);
+          lv_label_set_text(id(weather_big_temp), temp_buf);
+          lv_label_set_text(id(weather_big_temp_unit), tunit.c_str());
+
+          if (!id(ha_weather_wind_speed).has_state()) {
+            lv_label_set_text(id(weather_feels_like), "--");
+            lv_obj_set_style_text_color(id(weather_feels_like), lv_color_hex(0x8EDBFF), LV_PART_MAIN);
+            return;
+          }
+
+          std::string wunit = id(ha_weather_wind_speed_unit).state.c_str();
+          if (wunit.empty()) wunit = "m/s";
+
+          float temp_display = id(ha_weather_temperature).state;
+          float wind_display = id(ha_weather_wind_speed).state;
+
+          float temp_c = temp_display;
+          if (tunit == "°F" || tunit == "F") {
+            temp_c = (temp_display - 32.0f) * 5.0f / 9.0f;
+          }
+
+          float wind_ms = wind_display;
+          if (wunit == "km/h" || wunit == "kmh") {
+            wind_ms = wind_display / 3.6f;
+          } else if (wunit == "mph") {
+            wind_ms = wind_display * 0.44704f;
+          } else if (wunit == "kn" || wunit == "kt" || wunit == "kts" || wunit == "knots") {
+            wind_ms = wind_display * 0.514444f;
+          }
+
+          float feels_c = temp_c;
+          if (temp_c <= 10.0f && wind_ms > 1.3f) {
+            float wind_kmh = wind_ms * 3.6f;
+            float v16 = powf(wind_kmh, 0.16f);
+            feels_c = 13.12f + 0.6215f * temp_c - 11.37f * v16 + 0.3965f * temp_c * v16;
+          }
+
+          float feels_display = feels_c;
+          if (tunit == "°F" || tunit == "F") {
+            feels_display = feels_c * 9.0f / 5.0f + 32.0f;
+          }
+
+          char feels_buf[32];
+          snprintf(feels_buf, sizeof(feels_buf), "Feels %.0f%s", feels_display, tunit.c_str());
+          lv_label_set_text(id(weather_feels_like), feels_buf);
+
+          float diff = feels_display - temp_display;
+          lv_color_t c = lv_color_hex(0x8EDBFF);
+          if (diff >= 2.0f) {
+            c = lv_color_hex(0xFF8A65);
+          } else if (diff <= -2.0f) {
+            c = lv_color_hex(0x66CCFF);
+          } else {
+            c = lv_color_hex(0xB0BEC5);
+          }
+          lv_obj_set_style_text_color(id(weather_feels_like), c, LV_PART_MAIN);
+
+  - id: album_art_timeout_fallback
+    mode: restart
+    then:
+      - delay: 800ms
+      - if:
+          condition:
+            lambda: 'return !id(sendspin_album_art_valid);'
+          then:
+            - lvgl.image.update:
+                id: album_art_widget
+                src: fallback_playing_image
+
+  - id: mp_idle_debounce
+    mode: restart
+    then:
+      - delay: 1200ms
+      - if:
+          condition:
+            media_player.is_idle: sendspin_group_media_player
+          then:
+            - lvgl.page.show: idle_page
+            - script.execute: led_red
+
+  - id: update_media_menu_display
+    then:
+      - lambda: |-
+          const char *names[6] = {
+            "${media_name_1}",
+            "${media_name_2}",
+            "${media_name_3}",
+            "${media_name_4}",
+            "${media_name_5}",
+            "${media_name_6}",
+          };
+          lv_obj_t *labels[6] = {
+            id(menu_item_1),
+            id(menu_item_2),
+            id(menu_item_3),
+            id(menu_item_4),
+            id(menu_item_5),
+            id(menu_item_6),
+          };
+
+          int selected = id(media_menu_index);
+          if (selected < 0 || selected > 5) {
+            selected = 0;
+            id(media_menu_index) = 0;
+          }
+
+          for (int i = 0; i < 6; i++) {
+            std::string label_text = names[i];
+            lv_label_set_text(labels[i], label_text.c_str());
+            lv_obj_set_style_text_color(
+              labels[i],
+              i == selected ? lv_color_hex(0xFFFF00) : lv_color_hex(0xB0BEC5),
+              LV_PART_MAIN
+            );
+          }
+
+          lv_obj_scroll_to_view(labels[selected], LV_ANIM_OFF);
+
+  - id: open_media_menu
+    then:
+      - lambda: |-
+          id(media_menu_active) = true;
+          id(media_menu_index) = 0;
+      - script.execute: update_media_menu_display
+      - lvgl.page.show: media_menu_page
+
+  - id: advance_media_menu
+    then:
+      - if:
+          condition:
+            lambda: 'return id(media_menu_active);'
+          then:
+            - lambda: |-
+                id(media_menu_index) = (id(media_menu_index) + 1) % 6;
+            - script.execute: update_media_menu_display
+
+  - id: close_media_menu
+    then:
+      - lambda: |-
+          id(media_menu_active) = false;
+      - if:
+          condition:
+            media_player.is_idle: sendspin_group_media_player
+          then:
+            - lvgl.page.show: idle_page
+          else:
+            - lvgl.page.show: sendspin_page
+
+  - id: open_menu_hold_watch
+    mode: restart
+    then:
+      - delay: 700ms
+      - if:
+          condition:
+            lambda: 'return !id(media_menu_active) && id(media_button).state;'
+          then:
+            - lambda: |-
+                id(menu_button_hold_fired) = true;
+                id(menu_button_wait_for_release) = true;
+            - script.execute: open_media_menu
+
+  - id: menu_button_hold_watch
+    mode: restart
+    then:
+      - delay: 450ms
+      - if:
+          condition:
+            lambda: 'return id(media_menu_active) && id(media_button).state;'
+          then:
+            - lambda: |-
+                id(menu_button_hold_fired) = true;
+                id(menu_button_wait_for_release) = true;
+            - script.execute: select_media_menu
+
+  - id: select_media_menu
+    then:
+      - if:
+          condition:
+            lambda: 'return id(media_menu_active);'
+          then:
+            - lambda: |-
+                const char *names[6] = {
+                  "${media_name_1}",
+                  "${media_name_2}",
+                  "${media_name_3}",
+                  "${media_name_4}",
+                  "${media_name_5}",
+                  "${media_name_6}",
+                };
+                const char *urls[6] = {
+                  "${media_url_1}",
+                  "${media_url_2}",
+                  "${media_url_3}",
+                  "${media_url_4}",
+                  "${media_url_5}",
+                  "${media_url_6}",
+                };
+
+                int selected = id(media_menu_index);
+                if (selected < 0 || selected > 5) {
+                  selected = 0;
+                  id(media_menu_index) = 0;
+                }
+
+                id(selected_media_name) = names[selected];
+                id(selected_media_url) = urls[selected];
+            - homeassistant.action:
+                action: media_player.play_media
+                data:
+                  entity_id: ${ha_media_player_entity}
+                  media_content_type: music
+                data_template:
+                  media_content_id: "{{ media_url }}"
+                variables:
+                  media_url: |-
+                    return id(selected_media_url);
+            - script.execute: close_media_menu
+
+  - id: update_status_leds
+    then:
+      - lambda: |-
+          using media_player::MediaPlayerState;
+          auto state = id(sendspin_group_media_player).state;
+          if (
+            state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
+            state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
+          ) {
+            id(led_green).execute();
+          } else {
+            id(led_red).execute();
+          }
+
+  - id: led_red
+    then:
+      - light.turn_on: red_status_light
+      - light.turn_off: green_status_light
+      - light.turn_on:
+          id: led
+          red: 100%
+          green: 0%
+          blue: 0%
+          brightness: 100%
+
+  - id: led_green
+    then:
+      - light.turn_off: red_status_light
+      - light.turn_on: green_status_light
+      - light.turn_on:
+          id: led
+          red: 0%
+          green: 100%
+          blue: 0%
+          brightness: 100%
+
+interval:
+  - interval: 10min
+    then:
+      - script.execute: fetch_daily_forecast
+
+output:
+  - platform: ledc
+    pin: GPIO11
+    id: backlight_output
+    inverted: false
+
+  - platform: ledc
+    id: red_led
+    pin: GPIO3
+
+  - platform: ledc
+    id: green_led
+    pin: GPIO2
+
+light:
+  - platform: monochromatic
+    id: Sled
+    name: Screen
+    icon: "mdi:television"
+    entity_category: config
+    output: backlight_output
+    restore_mode: RESTORE_DEFAULT_ON
+    default_transition_length: 250ms
+
+  - platform: esp32_rmt_led_strip
+    id: led
+    name: LED light
+    entity_category: config
+    pin: GPIO21
+    chipset: WS2812
+    num_leds: 1
+    rgb_order: grb
+    default_transition_length: 0s
+
+  - platform: monochromatic
+    id: red_status_light
+    name: Red Status LED
+    output: red_led
+    restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: monochromatic
+    id: green_status_light
+    name: Green Status LED
+    output: green_led
+    restore_mode: RESTORE_DEFAULT_ON
+
+spi:
+  - id: spi_bus
+    clk_pin: 7
+    mosi_pin: 8
+
+display:
+  - platform: mipi_spi
+    id: main_display
+    spi_id: spi_bus
+    model: ST7789V
+    data_rate: 40MHz
+    spi_mode: MODE3
+    dc_pin: 10
+    reset_pin: 9
+    dimensions:
+      width: 320
+      height: 170
+      offset_width: 0
+      offset_height: 35
+    transform:
+      swap_xy: true
+      mirror_x: true
+      mirror_y: false
+    invert_colors: true
+    auto_clear_enabled: false
+    update_interval: never
+
+lvgl:
+  displays:
+    - main_display
+  buffer_size: 25%
+  color_depth: 16
+  bg_color: 0x000000
+  default_font: font_display
+
+  pages:
+    - id: boot_sound_page
+      bg_color: 0x000000
+      widgets:
+        - label:
+            align: CENTER
+            text: "Home Connected"
+            text_color: 0xFFFFFF
+            text_font: font_boot
+            width: 300
+            long_mode: WRAP
+            text_align: CENTER
+
+    - id: idle_page
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - label:
+            id: clock_label
+            align: TOP_MID
+            y: 8
+            width: 320
+            text: "--:--:--"
+            text_color: 0xFFFF00
+            text_font: font_7seg
+            text_letter_space: 0
+            text_align: CENTER
+
+        - label:
+            id: date_label
+            align: TOP_MID
+            y: 40
+            width: 320
+            text: "------"
+            text_color: 0xFFFFFF
+            text_font: font_date
+            text_align: CENTER
+
+        - obj:
+            id: weather_header
+            align: TOP_MID
+            y: 60
+            width: 320
+            height: 42
+            bg_opa: TRANSP
+            border_opa: TRANSP
+            pad_all: 0
+            scrollable: true
+            scrollbar_mode: ACTIVE
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: CENTER
+              flex_align_cross: CENTER
+              flex_align_track: CENTER
+            widgets:
+              - obj:
+                  width: SIZE_CONTENT
+                  height: SIZE_CONTENT
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  layout:
+                    type: flex
+                    flex_flow: row
+                    flex_align_main: CENTER
+                    flex_align_cross: CENTER
+                  widgets:
+                    - obj:
+                        width: SIZE_CONTENT
+                        height: SIZE_CONTENT
+                        bg_opa: TRANSP
+                        border_opa: TRANSP
+                        pad_all: 0
+                        widgets:
+                          - label:
+                              id: weather_icon_glow
+                              align: CENTER
+                              x: 1
+                              y: 1
+                              text: "\U000F0590"
+                              text_color: 0x404040
+                              text_font: font_mdi_weather
+
+                          - label:
+                              id: weather_icon
+                              align: CENTER
+                              x: 0
+                              y: 0
+                              text: "\U000F0590"
+                              text_color: 0xFFFFFF
+                              text_font: font_mdi_weather
+
+                    - label:
+                        id: weather_big_temp
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_temp_big
+                        pad_left: 6
+
+                    - label:
+                        id: weather_big_temp_unit
+                        text: "°C"
+                        text_color: 0xFFFF00
+                        text_font: font_temp_unit
+                        pad_left: 2
+
+              - label:
+                  id: weather_feels_like
+                  text: "--"
+                  text_color: 0x8EDBFF
+                  text_font: font_forecast
+                  pad_left: 14
+                  text_align: CENTER
+
+        - obj:
+            id: forecast_strip
+            hidden: true
+            align: BOTTOM_MID
+            y: -4
+            width: 312
+            height: 58
+            radius: 12
+            pad_top: 3
+            pad_bottom: 3
+            pad_left: 3
+            pad_right: 3
+            scrollable: false
+            bg_color: 0x000000
+            bg_opa: 35%
+            border_opa: 35%
+            border_color: 0xFFFF00
+            border_width: 2
+            widgets:
+              - obj:
+                  align: LEFT_MID
+                  width: 100
+                  height: 50
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+                  widgets:
+                    - label:
+                        id: forecast_day_1
+                        align: TOP_MID
+                        y: 0
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_forecast
+
+                    - label:
+                        id: forecast_icon_1
+                        align: CENTER
+                        y: -1
+                        text: "\U000F0590"
+                        text_color: 0xFFFFFF
+                        text_font: font_mdi_forecast
+
+                    - label:
+                        id: forecast_temp_1
+                        align: BOTTOM_MID
+                        y: 0
+                        text: "--"
+                        text_color: 0x8EDBFF
+                        text_font: font_forecast
+
+              - obj:
+                  align: CENTER
+                  width: 100
+                  height: 50
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+                  widgets:
+                    - label:
+                        id: forecast_day_2
+                        align: TOP_MID
+                        y: 0
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_forecast
+
+                    - label:
+                        id: forecast_icon_2
+                        align: CENTER
+                        y: -1
+                        text: "\U000F0590"
+                        text_color: 0xFFFFFF
+                        text_font: font_mdi_forecast
+
+                    - label:
+                        id: forecast_temp_2
+                        align: BOTTOM_MID
+                        y: 0
+                        text: "--"
+                        text_color: 0x8EDBFF
+                        text_font: font_forecast
+
+              - obj:
+                  align: RIGHT_MID
+                  width: 100
+                  height: 50
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+                  widgets:
+                    - label:
+                        id: forecast_day_3
+                        align: TOP_MID
+                        y: 0
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_forecast
+
+                    - label:
+                        id: forecast_icon_3
+                        align: CENTER
+                        y: -1
+                        text: "\U000F0590"
+                        text_color: 0xFFFFFF
+                        text_font: font_mdi_forecast
+
+                    - label:
+                        id: forecast_temp_3
+                        align: BOTTOM_MID
+                        y: 0
+                        text: "--"
+                        text_color: 0x8EDBFF
+                        text_font: font_forecast
+
+    - id: sendspin_page
+      bg_color: 0x000000
+      widgets:
+        - image:
+            id: album_art_widget
+            align: TOP_LEFT
+            x: 0
+            y: 0
+            src: fallback_playing_image
+            width: 170
+            height: 170
+            antialias: false
+            clickable: false
+
+        - obj:
+            align: TOP_RIGHT
+            x: 0
+            y: 0
+            width: 150
+            height: 170
+            bg_opa: TRANSP
+            border_opa: TRANSP
+            pad_top: 10
+            pad_bottom: 10
+            pad_left: 8
+            pad_right: 8
+            scrollable: false
+            widgets:
+              - label:
+                  id: now_playing_title_label
+                  align: TOP_MID
+                  y: 6
+                  width: 134
+                  height: 42
+                  text: " "
+                  text_color: 0xFFFF00
+                  text_font: font_display
+                  long_mode: DOT
+                  text_align: CENTER
+
+              - label:
+                  id: now_playing_album_label
+                  align: TOP_MID
+                  y: 62
+                  width: 134
+                  height: 42
+                  text: " "
+                  text_color: 0xFFFFFF
+                  text_font: font_display
+                  long_mode: DOT
+                  text_align: CENTER
+
+              - label:
+                  id: now_playing_artist_label
+                  align: TOP_MID
+                  y: 118
+                  width: 134
+                  height: 42
+                  text: " "
+                  text_color: 0x8EDBFF
+                  text_font: font_display
+                  long_mode: DOT
+                  text_align: CENTER
+
+    - id: media_menu_page
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - label:
+            align: TOP_MID
+            y: 8
+            width: 320
+            text: "Media Menu"
+            text_color: 0xFFFFFF
+            text_font: font_menu
+            text_align: CENTER
+
+        - obj:
+            align: CENTER
+            y: 14
+            width: 284
+            height: 144
+            radius: 18
+            bg_color: 0x111111
+            bg_opa: 75%
+            border_color: 0x3A3A3A
+            border_width: 2
+            border_opa: 70%
+            pad_top: 8
+            pad_bottom: 8
+            pad_left: 12
+            pad_right: 12
+            scrollable: true
+            scrollbar_mode: ACTIVE
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: START
+              flex_align_cross: CENTER
+              flex_align_track: CENTER
+            widgets:
+              - label:
+                  id: menu_item_1
+                  width: 252
+                  height: 28
+                  text: "${media_name_1}"
+                  text_color: 0xFFFF00
+                  text_font: font_menu
+                  text_align: CENTER
+                  long_mode: DOT
+              - label:
+                  id: menu_item_2
+                  width: 252
+                  height: 28
+                  text: "${media_name_2}"
+                  text_color: 0xB0BEC5
+                  text_font: font_menu
+                  text_align: CENTER
+                  long_mode: DOT
+              - label:
+                  id: menu_item_3
+                  width: 252
+                  height: 28
+                  text: "${media_name_3}"
+                  text_color: 0xB0BEC5
+                  text_font: font_menu
+                  text_align: CENTER
+                  long_mode: DOT
+              - label:
+                  id: menu_item_4
+                  width: 252
+                  height: 28
+                  text: "${media_name_4}"
+                  text_color: 0xB0BEC5
+                  text_font: font_menu
+                  text_align: CENTER
+                  long_mode: DOT
+              - label:
+                  id: menu_item_5
+                  width: 252
+                  height: 28
+                  text: "${media_name_5}"
+                  text_color: 0xB0BEC5
+                  text_font: font_menu
+                  text_align: CENTER
+                  long_mode: DOT
+              - label:
+                  id: menu_item_6
+                  width: 252
+                  height: 28
+                  text: "${media_name_6}"
+                  text_color: 0xB0BEC5
+                  text_font: font_menu
+                  text_align: CENTER
+                  long_mode: DOT
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: 1
+      mode: INPUT_PULLUP
+      inverted: true
+    id: media_button
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(media_menu_active);'
+          then:
+            - if:
+                condition:
+                  lambda: 'return !id(menu_button_wait_for_release);'
+                then:
+                  - lambda: |-
+                      id(menu_button_hold_fired) = false;
+                  - script.execute: menu_button_hold_watch
+          else:
+            - lambda: |-
+                id(menu_button_hold_fired) = false;
+            - script.execute: open_menu_hold_watch
+
+    on_release:
+      - script.stop: open_menu_hold_watch
+      - if:
+          condition:
+            lambda: 'return id(media_menu_active);'
+          then:
+            - script.stop: menu_button_hold_watch
+            - if:
+                condition:
+                  lambda: 'return id(menu_button_wait_for_release);'
+                then:
+                  - lambda: |-
+                      id(menu_button_wait_for_release) = false;
+                      id(menu_button_hold_fired) = false;
+                else:
+                  - if:
+                      condition:
+                        lambda: 'return !id(menu_button_hold_fired);'
+                      then:
+                        - script.execute: advance_media_menu
+                  - lambda: |-
+                      id(menu_button_hold_fired) = false;
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(menu_button_wait_for_release);'
+                then:
+                  - lambda: |-
+                      id(menu_button_wait_for_release) = false;
+                      id(menu_button_hold_fired) = false;
+
+    on_multi_click:
+      - timing:
+          - ON for at most 350ms
+          - OFF for at least 351ms
+        then:
+          - if:
+              condition:
+                lambda: 'return !id(media_menu_active) && !id(menu_button_hold_fired);'
+              then:
+                - homeassistant.action:
+                    action: media_player.media_play_pause
+                    data:
+                      entity_id: ${ha_media_player_entity}
+
+      - timing:
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at least 351ms
+        then:
+          - if:
+              condition:
+                lambda: 'return !id(media_menu_active) && !id(menu_button_hold_fired);'
+              then:
+                - homeassistant.action:
+                    action: media_player.media_next_track
+                    data:
+                      entity_id: ${ha_media_player_entity}
+
+      - timing:
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at least 351ms
+        then:
+          - if:
+              condition:
+                lambda: 'return !id(media_menu_active) && !id(menu_button_hold_fired);'
+              then:
+                - homeassistant.action:
+                    action: media_player.media_previous_track
+                    data:
+                      entity_id: ${ha_media_player_entity}
