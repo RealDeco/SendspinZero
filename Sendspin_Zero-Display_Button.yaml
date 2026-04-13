@@ -2,9 +2,10 @@ substitutions:
   name: esphome-web-f084b8
   friendly_name: Sendspin Zero Display Button
 
-  startup_sound_file: Home_Connected
   ha_weather_entity: weather.forecast_home
   ha_media_player_entity: media_player.mom_s_speakers
+  display_state_player: sendspin_group_media_player
+  api_connected_script: api_connected_actions
 
   media_name_1: "Neil Diamond"
   media_url_1: "library://playlist/72"
@@ -19,13 +20,13 @@ substitutions:
   media_name_6: "Radio Vinyl"
   media_url_6: "https://live-bauerdk.sharp-stream.com/Vinyl_dk.mp3"
 
-packages:
-  hw:
-    url: https://github.com/RealDeco/SendspinZero.git
-    ref: main
-    refresh: 0s
-    files:
-      - analog_speaker_config.yaml
+#packages: #uncomment if you have a DAC connected.
+#  hw:
+#    url: https://github.com/RealDeco/SendspinZero.git
+#    ref: main
+#    refresh: 0s
+#    files:
+#      - Sendspin_Zero-Display_Button-audio.yaml
 
 esphome:
   name: ${name}
@@ -50,16 +51,7 @@ logger:
 
 api:
   on_client_connected:
-    - lambda: |-
-        if (!id(boot_sound_played)) {
-          id(boot_sound_played) = true;
-          if (id(startup_sound_switch).state) {
-            id(play_sound)->execute(true, std::string("ready_sound"));
-          }
-        }
-    - delay: 5s
-    - script.execute: update_weather_display
-    - script.execute: fetch_daily_forecast
+    - script.execute: ${api_connected_script}
 
 ota:
   - platform: esphome
@@ -85,20 +77,10 @@ external_components:
       type: git
       url: https://github.com/kahrendt/esphome
       ref: 890e33f99af2c2ea15dc74c3ec4cf32d25203526
-    components: [const, media_source, sendspin, generic_image]
-  - source:
-      type: git
-      url: https://github.com/esphome/esphome
-      ref: ff8ce89556748509d7ee8724e12d9d43d3c8c1e8
-    refresh: 0s
-    components: [http_request]
+    components: [const, sendspin, generic_image]
 
 globals:
   - id: sendspin_album_art_valid
-    type: bool
-    restore_value: no
-    initial_value: "false"
-  - id: boot_sound_played
     type: bool
     restore_value: no
     initial_value: "false"
@@ -160,74 +142,29 @@ sendspin:
   id: sendspin_hub
   task_stack_in_psram: false
 
-http_request:
-  buffer_size_rx: 2048
-
-audio_file:
-  - id: ready_sound
-    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
-
-media_source:
-  - platform: audio_file
-    id: audio_file_announcement_source
-  - platform: http_request
-    id: http_announcement_source
-    buffer_size: 250000
-  - platform: http_request
-    id: http_media_source
-    buffer_size: 500000
-  - platform: sendspin
-    id: sendspin_media_source
-
 media_player:
   - platform: sendspin
     id: sendspin_group_media_player
     name: Sendspin Group Media Player
 
-  - platform: speaker_source
-    id: external_media_player
-    name: Media Player
-
-    announcement_pipeline:
-      format: FLAC
-      num_channels: 1
-      sample_rate: ${media_sample_rate}
-      speaker: announcement_resampling_speaker
-      sources:
-        - audio_file_announcement_source
-        - http_announcement_source
-
-    media_pipeline:
-      format: FLAC
-      num_channels: 2
-      sample_rate: ${media_sample_rate}
-      speaker: media_resampling_speaker
-      sources:
-        - http_media_source
-        - sendspin_media_source
-
-    volume_increment: 0.05
-    volume_min: 0.4
-    volume_max: 0.85
-
     on_play:
       then:
         - script.stop: mp_idle_debounce
         - lvgl.page.show: sendspin_page
-        - script.execute: led_green
+        - script.execute: update_status_leds
 
     on_announcement:
       then:
-        - script.execute: led_green
+        - script.execute: update_status_leds
 
     on_idle:
       then:
         - script.execute: mp_idle_debounce
-        - script.execute: led_red
+        - script.execute: update_status_leds
 
     on_pause:
       then:
-        - script.execute: led_red
+        - script.execute: update_status_leds
 
     on_state:
       then:
@@ -489,6 +426,12 @@ font:
       - "\U000F0599"
 
 script:
+  - id: api_connected_actions
+    then:
+      - delay: 5s
+      - script.execute: update_weather_display
+      - script.execute: fetch_daily_forecast
+
   - id: fetch_daily_forecast
     mode: restart
     then:
@@ -706,39 +649,10 @@ script:
       - delay: 1200ms
       - if:
           condition:
-            media_player.is_idle: external_media_player
+            media_player.is_idle: ${display_state_player}
           then:
             - lvgl.page.show: idle_page
             - script.execute: led_red
-
-  - id: play_sound
-    parameters:
-      priority: bool
-      sound_file: string
-    then:
-      - if:
-          condition:
-            lambda: 'return sound_file == "ready_sound";'
-          then:
-            - delay: 2s
-            - lvgl.page.show: boot_sound_page
-
-      - if:
-          condition:
-            lambda: return priority;
-          then:
-            - media_player.stop:
-                id: external_media_player
-                announcement: true
-
-      - lambda: |-
-          if ((id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING) || priority) {
-            id(external_media_player)
-              ->make_call()
-              .set_media_url("audio-file://" + sound_file)
-              .set_announcement(true)
-              .perform();
-          }
 
   - id: update_media_menu_display
     then:
@@ -802,7 +716,7 @@ script:
           id(media_menu_active) = false;
       - if:
           condition:
-            media_player.is_idle: external_media_player
+            media_player.is_idle: ${display_state_player}
           then:
             - lvgl.page.show: idle_page
           else:
@@ -882,7 +796,7 @@ script:
     then:
       - lambda: |-
           using media_player::MediaPlayerState;
-          auto state = id(external_media_player).state;
+          auto state = id(${display_state_player}).state;
           if (
             state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
             state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
@@ -918,15 +832,6 @@ interval:
   - interval: 10min
     then:
       - script.execute: fetch_daily_forecast
-
-switch:
-  - platform: template
-    id: startup_sound_switch
-    name: Startup sound
-    icon: "mdi:card-text-outline"
-    entity_category: config
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
 
 output:
   - platform: ledc
