@@ -254,7 +254,7 @@ Same as SendspinZero-Display + SendspinZero-Button
 
 same components as the other versions (esp32-s3 + PCM5102A DAC) +
 
-* 1.9" screen: [https://www.aliexpress.com/item/1005010424983352.html](https://www.aliexpress.com/item/1005010424983352.html)
+* 1.9" screen: [https://www.aliexpress.com/item/1005007098895718.html](https://www.aliexpress.com/item/1005007098895718.html)
 
 ---
 
