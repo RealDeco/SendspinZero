@@ -1,0 +1,259 @@
+## SendspinZero-Speaker. Edit the settings below.
+substitutions:
+  name: esphome-web-f08f10
+  friendly_name: SendspinZero-Speaker
+
+## SETTINGS ######################################################################################################################################
+
+  # Startup sound, options are: Home_Connected or Home_Connected_Male
+  startup_sound_file: Home_Connected
+
+  # your home assistant weather entity, in most cases the same.
+  ha_weather_entity: weather.forecast_home
+
+  media_sample_rate: 48000
+
+##################################################################################################################################################
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.1.0
+  name_add_mac_suffix: false
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: led_red
+
+esp32:
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+logger:
+  level: warn
+
+api:
+  on_client_connected:
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, std::string("ready_sound"));
+          }
+        }
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    password: "RZ7D3EzJdPM6"
+
+psram:
+  mode: quad
+  speed: 80MHz
+
+captive_portal:
+
+external_components:
+  - source:
+      # https://github.com/esphome/esphome/pull/14933
+      type: git
+      url: https://github.com/kahrendt/esphome
+      ref: 7a6cf5c8472b7e2fa18ee0fc314f66a80d249e32
+    components: [const, media_source, sendspin, generic_image]
+  - source:
+      # https://github.com/esphome/esphome/pull/12429
+      type: git
+      url: https://github.com/esphome/esphome
+      ref: ff8ce89556748509d7ee8724e12d9d43d3c8c1e8
+    refresh: 0s
+    components: [http_request]
+
+sendspin:
+  id: sendspin_hub
+  task_stack_in_psram: false
+
+http_request:
+  buffer_size_rx: 2048  # Reduces CPU load when streaming audio
+
+i2s_audio:
+  - id: i2s_audio_bus
+    i2s_lrclk_pin: GPIO4
+    i2s_bclk_pin: GPIO3
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    i2s_audio_id: i2s_audio_bus
+    i2s_dout_pin: GPIO2
+    dac_type: external
+    channel: mono
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: box_speaker
+    num_channels: 2
+    task_stack_in_psram: true
+    source_speakers:
+      - id: announcement_mixing_input
+      - id: media_mixing_input
+
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+audio_file:
+  - id: ready_sound
+    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
+
+media_source:
+  - platform: audio_file
+    id: audio_file_announcement_source
+  - platform: http_request
+    id: http_announcement_source
+    buffer_size: 250000
+  - platform: http_request
+    id: http_media_source
+    buffer_size: 500000
+  - platform: sendspin
+    id: sendspin_media_source
+
+media_player:
+  - platform: sendspin
+    id: sendspin_group_media_player
+    name: Sendspin Group Media Player
+
+  - platform: speaker_source
+    id: external_media_player
+    name: Media Player
+
+    announcement_pipeline:
+      format: FLAC
+      num_channels: 1
+      sample_rate: ${media_sample_rate}
+      speaker: announcement_resampling_speaker
+      sources:
+        - audio_file_announcement_source
+        - http_announcement_source
+
+    media_pipeline:
+      format: FLAC
+      num_channels: 2
+      sample_rate: ${media_sample_rate}
+      speaker: media_resampling_speaker
+      sources:
+        - http_media_source
+        - sendspin_media_source
+    volume_increment: 0.05
+    volume_min: 0.4
+    volume_max: 0.9
+
+    on_state:
+      then:
+        - lambda: |-
+            using media_player::MediaPlayerState;
+            auto state = id(external_media_player).state;
+            if (
+              state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
+              state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
+            ) {
+              id(led_green).execute();
+            } else {
+              id(led_red).execute();
+            }
+
+script:
+  - id: play_sound
+    parameters:
+      priority: bool
+      sound_file: string
+    then:
+      - if:
+          condition:
+            lambda: return priority;
+          then:
+            - media_player.stop:
+                id: external_media_player
+                announcement: true
+      - lambda: |-
+          if ((id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING) || priority) {
+            id(external_media_player)
+              ->make_call()
+              .set_media_url("audio-file://" + sound_file)
+              .set_announcement(true)
+              .perform();
+          }
+
+  - id: led_red
+    then:
+      - light.turn_on:
+          id: led
+          red: 100%
+          green: 0%
+          blue: 0%
+          brightness: 100%
+
+  - id: led_green
+    then:
+      - light.turn_on:
+          id: led
+          red: 0%
+          green: 100%
+          blue: 0%
+          brightness: 100%
+
+switch:
+  - platform: template
+    id: startup_sound_switch
+    name: Startup sound
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+globals:
+  - id: boot_sound_played
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: boot_announce_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led
+    name: LED light
+    disabled_by_default: false
+    entity_category: config
+    pin: GPIO21
+    default_transition_length: 0s
+    chipset: WS2812
+    num_leds: 1
+    rgb_order: grb
+    effects:
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: 50%
+          max_brightness: 100%
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 100ms
+          update_interval: 100ms
+          min_brightness: 50%
+          max_brightness: 100%
