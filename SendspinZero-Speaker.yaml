@@ -96,7 +96,7 @@ speaker:
   - platform: mixer
     id: mixing_speaker
     output_speaker: box_speaker
-    num_channels: 2
+    num_channels: 1
     task_stack_in_psram: true
     source_speakers:
       - id: announcement_mixing_input
