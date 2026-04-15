@@ -171,6 +171,8 @@ Simplest version of all: **just two wires and a resistor**.
 
 ### Parts
 
+* 1 pcs. 332-470ohm resistor [https://www.aliexpress.com/item/1005005252979796.html](https://www.aliexpress.com/item/1005005252979796.html)
+
 * RCA female: [https://www.aliexpress.com/item/1005010424983352.html](https://www.aliexpress.com/item/1005010424983352.html)
 * Cables: [https://www.aliexpress.com/item/1005008202856228.html](https://www.aliexpress.com/item/1005008202856228.html)
 
