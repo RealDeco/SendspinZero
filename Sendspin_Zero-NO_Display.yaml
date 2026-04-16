@@ -1,7 +1,7 @@
-## SendspinZero for Analog + Digital Coax and Toslink versions WITHOUT display. Edit the settings below.
+## SendspinZero NO Display for Analog + Digital Coax and Toslink versions WITHOUT display. Edit the settings below.
 substitutions:
-  name: esphome-web-e82548
-  friendly_name: Sendspin Zero NO Display
+  name: esphome-web-e82bb8
+  friendly_name: Sendspin Zero Toslink
 
 ## SETTINGS ######################################################################################################################################
 
@@ -11,23 +11,33 @@ substitutions:
   # your home assistant weather entity, in most cases the same.
   ha_weather_entity: weather.forecast_home
 
-packages: # uncomment the one you use (analog for normal jack, digital for coax or toslink spdif)
+## SENDSPIN SETTINGS #############################################################################################################################
 
-  hw: #ANALOG
-    url: https://github.com/RealDeco/SendspinZero.git
+packages:
+  extcomp:
+    url: https://github.com/RealDeco/xiaozhi-esphome.git
     ref: main
     refresh: 0s
     files:
-      - analog_speaker_config.yaml
+      - devices/Under_Development/Modular/HW/sendspin-external_components.yaml
 
-#  hw: #DIGITAL
+## AUDIO SETTINGS ################################################################################################################################
+
+#  hw: #ANALOG
 #    url: https://github.com/RealDeco/SendspinZero.git
 #    ref: main
 #    refresh: 0s
 #    files:
-#      - digital_speaker_config.yaml
+#      - analog_speaker_config.yaml
 
-##################################################################################################################################################
+  hw: #DIGITAL
+    url: https://github.com/RealDeco/SendspinZero.git
+    ref: main
+    refresh: 0s
+    files:
+      - digital_speaker_config.yaml
+
+## END OF SETTINGS ###############################################################################################################################
 
 esphome:
   name: ${name}
@@ -71,21 +81,6 @@ psram:
   speed: 80MHz
 
 captive_portal:
-
-external_components:
-  - source:
-      # https://github.com/esphome/esphome/pull/14933
-      type: git
-      url: https://github.com/kahrendt/esphome
-      ref: 890e33f99af2c2ea15dc74c3ec4cf32d25203526
-    components: [const, media_source, sendspin, generic_image]
-  - source:
-      # https://github.com/esphome/esphome/pull/12429
-      type: git
-      url: https://github.com/esphome/esphome
-      ref: ff8ce89556748509d7ee8724e12d9d43d3c8c1e8
-    refresh: 0s
-    components: [http_request]
 
 sendspin:
   id: sendspin_hub
