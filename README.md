@@ -217,7 +217,7 @@ In HA mode, clicks are exposed for automations.
 
 This version uses a combo board with a **rotary encoder + button + display i found cheap on aliexpress**.
 
-<img width="1594" height="867" src="https://github.com/user-attachments/assets/cf050296-3c74-4326-8185-5399bdf432cd" />
+<img width="2395" height="722" src="https://github.com/user-attachments/assets/31692617-ce55-4ee5-8284-0439f045655c" />
 
 3D files are in [`3D_Files`](3D_Files)
 
