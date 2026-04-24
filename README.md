@@ -234,7 +234,7 @@ This version uses a combo board with a **rotary encoder + button + display i fou
 
 (TX = GPIO43, RX=GPIO44 on the zero board)
 
-<img width="475" height="515" src="https://github.com/user-attachments/assets/52a29e76-ad97-437b-b1a9-84b53068b87b" />
+<img width="663" height="573" src="https://github.com/user-attachments/assets/e70dc743-2b43-4fc2-916d-d06a073357b1" />
 
 ### Part
 
