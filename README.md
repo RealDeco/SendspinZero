@@ -300,6 +300,8 @@ same esp32-s3 zero as the other versions +
 
 <img width="2076" height="890" src="https://github.com/user-attachments/assets/f7906c40-dcdf-41d5-98e9-ac189f48ce97" />
 
+3D files are in [`3D_Files`](3D_Files)
+
 This is the only device based on esp32-s2 Supermini due to it's battery connection.
 
 ### Pin Mapping
