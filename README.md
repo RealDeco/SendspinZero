@@ -262,3 +262,33 @@ same components as the other versions (esp32-s3 + PCM5102A DAC + Button) +
 
 ---
 
+## Speaker amplifier version
+
+<img width="1536" height="1024" src="https://github.com/user-attachments/assets/7088001b-3a60-41a7-8856-7a2b5ccdfa96" />
+
+<img width="2233" height="891" src="https://github.com/user-attachments/assets/13aa64f8-b2fb-4f75-b916-e04134e37608" />
+
+
+NO 3D files made for this device.
+
+This is the only device with amplifier onboard, it's mono so for stereo speakers you need a module for each speaker and have them playing as stereo in MA.
+
+### Pin Mapping
+(remove two pins from the spacer and solder the boards together)
+
+| ESP32-S3 GPIO | MAX98357    |
+| ------------- | ----------- |
+| GND           | GND         |
+| 3V            | 3V          |
+| GPIO2         | DIN         |
+| GPIO3         | BCLK        |
+| GPIO4         | LRC         |
+
+### Parts
+
+same esp32-s3 zero as the other versions +
+
+* MAX98357: https://www.aliexpress.com/item/1005007003802663.html
+
+
+---
