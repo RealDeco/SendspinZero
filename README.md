@@ -278,13 +278,15 @@ This is the only device with amplifier onboard, it's mono so for stereo speakers
 
 | ESP32-S3 GPIO | MAX98357    |
 | ------------- | ----------- |
-| VCC (5V)      | VCC         |
+| VCC (5V)      | Vin         |
 | GND           | GND         |
-| *not used*    |             |
-| *not used*    |             |
+| *not used*    | SD          |
+| *not used*    | GAIN        |
 | GPIO2         | DIN         |
 | GPIO3         | BCLK        |
 | GPIO4         | LRC         |
+
+GAIN pin can be connected to GND for 12db gain. (or with 100k resistor to GND for 15db gain)
 
 ### Parts
 
