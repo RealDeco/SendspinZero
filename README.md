@@ -294,5 +294,43 @@ same esp32-s3 zero as the other versions +
 
 * MAX98357: https://www.aliexpress.com/item/1005007003802663.html
 
+---
+
+## Supermini Headphone amplifier version
+
+<img width="2076" height="890" src="https://github.com/user-attachments/assets/f7906c40-dcdf-41d5-98e9-ac189f48ce97" />
+
+This is the only device based on esp32-s2 Supermini due to it's battery connection.
+
+### Pin Mapping
+
+| ESP32-S3 GPIO | DAC         |
+| ------------- | ----------- |
+| VCC (3V)      | VCC         |
+| GND           | GND         |
+| GPIO6         | DIN         |
+| GPIO7         | BCK         |
+| GPIO5         | WS          |
+
+| ESP32-S3 GPIO | Touch board |
+| ------------- | ----------- |
+| VCC (3V)      | VCC         |
+| GND           | GND         |
+| GPIO4         | I/O         |
+
+| ESP32-S3 GPIO | battery     |
+| ------------- | ----------- |
+| + pole on back| +           |
+| - pole on back| -           |
+
+## Parts List
+
+* **1 × ESP32-S3 Supermini** https://www.aliexpress.com/item/1005010376539004.html
+
+* **1 × Headphone amplifier DAC** https://www.aliexpress.com/item/1005008889469187.html
+
+* **1 × Touch sensor** https://www.aliexpress.com/item/4000540638639.html
+
+* **1 × 3.7V 802035-500Mah Battery** (bought mine on temu but can be found on aliexpress too)
 
 ---
