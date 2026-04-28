@@ -296,7 +296,7 @@ same esp32-s3 zero as the other versions +
 
 ---
 
-## Supermini Headphone amplifier version
+## Supermini Headphone amplifier version (make corded headphones wireless)
 
 <img width="2076" height="890" src="https://github.com/user-attachments/assets/f7906c40-dcdf-41d5-98e9-ac189f48ce97" />
 
