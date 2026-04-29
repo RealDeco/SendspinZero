@@ -335,4 +335,10 @@ This is the only device based on esp32-s2 Supermini due to it's battery connecti
 
 * **1 × 3.7V 802035-500Mah Battery** (bought mine on temu but can be found on aliexpress too)
 
+* **1 x 4mm switch** https://www.aliexpress.com/item/1005010432259017.html
+
+(3D file includes both with and without hole for switch)
+
+<img width="294" height="155" src="https://github.com/user-attachments/assets/6398f7b7-6a31-48bf-891a-95dad5d790a5" />
+
 ---
