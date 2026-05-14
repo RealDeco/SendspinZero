@@ -1,7 +1,7 @@
 ## SendspinZero NO Display for Analog + Digital Coax and Toslink versions WITHOUT display. Edit the settings below.
 substitutions:
   name: esphome-web-e82bb8
-  friendly_name: Sendspin Zero No Speaker
+  friendly_name: Sendspin Zero No Display
 
 ## SETTINGS ######################################################################################################################################
 
@@ -11,38 +11,30 @@ substitutions:
   # your home assistant weather entity, in most cases the same.
   ha_weather_entity: weather.forecast_home
 
-## SENDSPIN SETTINGS #############################################################################################################################
-
-packages:
-  extcomp:
-    url: https://github.com/RealDeco/xiaozhi-esphome.git
-    ref: main
-    refresh: 0s
-    files:
-      - devices/Under_Development/Modular/HW/sendspin-external_components.yaml
-
 ## AUDIO SETTINGS ################################################################################################################################
 
-  hw: #ANALOG
-    url: https://github.com/RealDeco/SendspinZero.git
-    ref: main
-    refresh: 0s
-    files:
-      - analog_speaker_config.yaml
+packages:
 
-#  hw: #DIGITAL
+#  hw: #ANALOG
 #    url: https://github.com/RealDeco/SendspinZero.git
 #    ref: main
 #    refresh: 0s
 #    files:
-#      - digital_speaker_config.yaml
+#      - analog_speaker_config.yaml
+
+  hw: #DIGITAL
+    url: https://github.com/RealDeco/SendspinZero.git
+    ref: main
+    refresh: 0s
+    files:
+      - digital_speaker_config.yaml
 
 ## END OF SETTINGS ###############################################################################################################################
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.1.0
+  min_version: 2026.5.0
   name_add_mac_suffix: false
   on_boot:
     priority: -100
@@ -86,9 +78,6 @@ sendspin:
   id: sendspin_hub
   task_stack_in_psram: false
 
-http_request:
-  buffer_size_rx: 2048  # Reduces CPU load when streaming audio
-
 audio_file:
   - id: ready_sound
     file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
@@ -96,12 +85,10 @@ audio_file:
 media_source:
   - platform: audio_file
     id: audio_file_announcement_source
-  - platform: http_request
+  - platform: audio_http
     id: http_announcement_source
-    buffer_size: 250000
-  - platform: http_request
+  - platform: audio_http
     id: http_media_source
-    buffer_size: 500000
   - platform: sendspin
     id: sendspin_media_source
 
