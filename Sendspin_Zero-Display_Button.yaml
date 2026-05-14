@@ -20,17 +20,15 @@ substitutions:
   media_name_6: "Radio Vinyl"
   media_url_6: "https://live-bauerdk.sharp-stream.com/Vinyl_dk.mp3"
 
-packages:
+external_components:
 
-  extcomp:
-    url: https://github.com/RealDeco/xiaozhi-esphome.git
-    ref: main
-    refresh: 0s
-    files:
-      - devices/Under_Development/Modular/HW/sendspin-external_components.yaml
+  - source: github://pr#16057
+    components: [generic_image, sendspin]
+    refresh: 1h
 
 # uncomment below if you have a DAC connected.
 
+#packages:
 #  audio:
 #    url: https://github.com/RealDeco/SendspinZero.git
 #    ref: main
@@ -47,7 +45,7 @@ packages:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.4.0
+  min_version: 2026.5.0
   name_add_mac_suffix: false
   on_boot:
     priority: -100
@@ -128,11 +126,11 @@ image:
 generic_image:
   - platform: sendspin
     id: sendspin_album_art
-    format: jpg
+    format: jpeg
     type: RGB565
     resize: 170x170
-    image_source: ALBUM
-    on_image_decoded:
+    source: ALBUM
+    on_image_display:
       - script.stop: album_art_timeout_fallback
       - lambda: |-
           id(sendspin_album_art_valid) = true;
