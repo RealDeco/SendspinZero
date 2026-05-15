@@ -48,6 +48,11 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
+          cat > secrets.yaml <<'EOF'
+          wifi_ssid: "SendspinZero Setup"
+          wifi_password: "sendspinzero"
+          EOF
+
           configs=(*.yaml)
           if [ ${#configs[@]} -eq 0 ]; then
             echo "No config files found."
