@@ -34,13 +34,13 @@ packages:
     ref: main
     refresh: 0s
     files:
-      - analog_audio_config.yaml
+      - configs/analog_audio_config.yaml
   hw:
     url: https://github.com/RealDeco/SendspinZero.git
     ref: main
     refresh: 0s
     files:
-      - analog_speaker_config.yaml
+      - configs/analog_speaker_config.yaml
 
 esphome:
   name: ${name}
