@@ -19,7 +19,7 @@ esphome:
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "0.0.0"
+    version: "2026.5.0"
   on_boot:
     priority: -100
     then:
