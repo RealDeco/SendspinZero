@@ -1,0 +1,355 @@
+## SendspinZero for Analog + Digital Coax and Toslink with a BUTTON versions. Edit the settings below.
+substitutions:
+  name: esphome-web-e82548
+  friendly_name: Sendspin Zero Button
+
+## SETTINGS ######################################################################################################################################
+
+  # Startup sound, options are: Home_Connected or Home_Connected_Male
+  startup_sound_file: Home_Connected
+
+  # your home assistant weather entity, in most cases the same.
+  ha_weather_entity: weather.forecast_home
+
+## SENDSPIN SETTINGS #############################################################################################################################
+
+external_components:
+
+  - source: github://pr#16057
+    components: [generic_image, sendspin]
+    refresh: 1h
+
+## AUDIO SETTINGS ################################################################################################################################
+
+packages:
+
+#  hw: #ANALOG
+#    url: https://github.com/RealDeco/SendspinZero.git
+#    ref: main
+#    refresh: 0s
+#    files:
+#      - analog_speaker_config.yaml
+
+  hw: #DIGITAL
+    url: https://github.com/RealDeco/SendspinZero.git
+    ref: main
+    refresh: 0s
+    files:
+      - digital_speaker_config.yaml
+
+## END OF SETTINGS ###############################################################################################################################
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.5.0
+  name_add_mac_suffix: false
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: update_status_leds
+
+esp32:
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+logger:
+  level: warn
+
+api:
+  on_client_connected:
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, std::string("ready_sound"));
+          }
+        }
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    password: "RZ7D3EzJdPM6"
+
+psram:
+  mode: quad
+  speed: 80MHz
+  ignore_not_found: false
+
+captive_portal:
+
+sendspin:
+  id: sendspin_hub
+  task_stack_in_psram: false
+
+audio_file:
+  - id: ready_sound
+    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
+
+media_source:
+  - platform: audio_file
+    id: audio_file_announcement_source
+  - platform: audio_http
+    id: http_announcement_source
+  - platform: audio_http
+    id: http_media_source
+  - platform: sendspin
+    id: sendspin_media_source
+
+media_player:
+  - platform: sendspin
+    id: sendspin_group_media_player
+    name: Sendspin Group Media Player
+
+  - platform: speaker_source
+    id: external_media_player
+    name: Media Player
+
+    announcement_pipeline:
+      format: FLAC
+      num_channels: 1
+      sample_rate: ${media_sample_rate}
+      speaker: announcement_resampling_speaker
+      sources:
+        - audio_file_announcement_source
+        - http_announcement_source
+
+    media_pipeline:
+      format: FLAC
+      num_channels: 2
+      sample_rate: ${media_sample_rate}
+      speaker: media_resampling_speaker
+      sources:
+        - http_media_source
+        - sendspin_media_source
+    volume_increment: 0.05
+    volume_min: 0.4
+    volume_max: 0.9
+
+    on_state:
+      then:
+        - script.execute: update_status_leds
+
+script:
+  - id: play_sound
+    parameters:
+      priority: bool
+      sound_file: string
+    then:
+      - if:
+          condition:
+            lambda: return priority;
+          then:
+            - media_player.stop:
+                id: external_media_player
+                announcement: true
+      - lambda: |-
+          if ((id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING) || priority) {
+            id(external_media_player)
+              ->make_call()
+              .set_media_url("audio-file://" + sound_file)
+              .set_announcement(true)
+              .perform();
+          }
+
+  - id: update_status_leds
+    then:
+      - if:
+          condition:
+            lambda: 'return id(button_mode).current_option() == "HA Control";'
+          then:
+            - light.turn_on: red_status_light
+            - light.turn_on: green_status_light
+          else:
+            - lambda: |-
+                using media_player::MediaPlayerState;
+                auto state = id(external_media_player).state;
+                if (
+                  state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
+                  state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
+                ) {
+                  id(led_green).execute();
+                } else {
+                  id(led_red).execute();
+                }
+
+  - id: led_red
+    then:
+      - light.turn_on: red_status_light
+      - light.turn_off: green_status_light
+
+  - id: led_green
+    then:
+      - light.turn_off: red_status_light
+      - light.turn_on: green_status_light
+
+switch:
+  - platform: template
+    id: startup_sound_switch
+    name: Startup sound
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+select:
+  - platform: template
+    id: button_mode
+    name: Button Mode
+    optimistic: true
+    restore_value: true
+    initial_option: Player Control
+    options:
+      - Player Control
+      - HA Control
+    set_action:
+      - lambda: |-
+          id(button_mode).publish_state(x);
+      - script.execute: update_status_leds
+
+text_sensor:
+  - platform: template
+    id: button_action
+    name: Button Action
+    update_interval: never
+
+globals:
+  - id: boot_sound_played
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: boot_announce_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+output:
+  - platform: ledc
+    id: red_led
+    pin: GPIO3
+
+  - platform: ledc
+    id: green_led
+    pin: GPIO2
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led
+    name: LED light
+    disabled_by_default: false
+    entity_category: config
+    pin: GPIO21
+    default_transition_length: 0s
+    chipset: WS2812
+    num_leds: 1
+    rgb_order: grb
+    effects:
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: 50%
+          max_brightness: 100%
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 100ms
+          update_interval: 100ms
+          min_brightness: 50%
+          max_brightness: 100%
+
+  - platform: monochromatic
+    id: red_status_light
+    name: Red Status LED
+    output: red_led
+    restore_mode: ALWAYS_OFF
+
+  - platform: monochromatic
+    id: green_status_light
+    name: Green Status LED
+    output: green_led
+    restore_mode: ALWAYS_OFF
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: 1
+      mode: INPUT_PULLUP
+      inverted: true
+    id: media_button
+    on_multi_click:
+      - timing:
+          - ON for at most 350ms
+          - OFF for at least 351ms
+        then:
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - media_player.toggle: sendspin_group_media_player
+              else:
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "single"
+
+      # Double click
+      - timing:
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at least 351ms
+        then:
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - media_player.next: sendspin_group_media_player
+              else:
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "double"
+
+      # Triple click
+      - timing:
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at most 350ms
+          - ON for at most 350ms
+          - OFF for at least 351ms
+        then:
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - media_player.previous: sendspin_group_media_player
+              else:
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "triple"
+
+      # Hold => toggle between modes
+      - timing:
+          - ON for at least 700ms
+        then:
+          - if:
+              condition:
+                lambda: 'return id(button_mode).current_option() == "Player Control";'
+              then:
+                - select.set:
+                    id: button_mode
+                    option: "HA Control"
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "mode_ha"
+              else:
+                - select.set:
+                    id: button_mode
+                    option: "Player Control"
+                - text_sensor.template.publish:
+                    id: button_action
+                    state: "mode_player"
