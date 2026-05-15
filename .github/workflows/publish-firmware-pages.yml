@@ -28,6 +28,8 @@ jobs:
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
 
       - name: Compute firmware version
         id: version
@@ -45,13 +47,19 @@ jobs:
           PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
           FW_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           shopt -s nullglob
 
           cat > secrets.yaml <<'EOF'
           wifi_ssid: "SendspinZero Setup"
           wifi_password: "sendspinzero"
+          api_encryption_key: "0000000000000000000000000000000000000000000="
+          ota_password: "sendspinzero"
           EOF
+
+          echo "Pages base URL: $PAGES_BASE_URL"
+          echo "Firmware version: $FW_VERSION"
+          echo "Created stub secrets.yaml"
 
           configs=(*.yaml)
           if [ ${#configs[@]} -eq 0 ]; then
@@ -59,15 +67,31 @@ jobs:
             exit 1
           fi
 
+          echo "Found configs:"
+          printf ' - %s\n' "${configs[@]}"
+
           mkdir -p site
+          failed=0
+
           for config in "${configs[@]}"; do
             name="$(basename "${config%.*}")"
-            echo "Generating page for $config"
-            uvx ewt-gen==1.4.2 --dev "$config" \
+            echo "::group::Generating page for $config"
+            echo "Config: $config"
+            echo "Output: site/$name"
+            echo "Publish URL: ${PAGES_BASE_URL%/}/$name"
+
+            if uvx ewt-gen==1.4.2 --dev "$config" \
               -t "$name" \
               -o "site/$name" \
               --publish-url "${PAGES_BASE_URL%/}/$name" \
-              --fw-version "$FW_VERSION"
+              --fw-version "$FW_VERSION"; then
+              echo "OK: $config"
+            else
+              echo "::error::FAILED: $config"
+              failed=1
+            fi
+
+            echo "::endgroup::"
           done
 
           {
@@ -80,6 +104,11 @@ jobs:
             done
             echo '</ul></body></html>'
           } > site/index.html
+
+          if [ "$failed" -ne 0 ]; then
+            echo "One or more configs failed."
+            exit 1
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
