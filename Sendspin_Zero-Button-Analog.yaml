@@ -28,14 +28,14 @@ packages:
     ref: main
     refresh: 0s
     files:
-      - analog_speaker_config.yaml
+      - configs/analog_speaker_config.yaml
 
 #  hw: #DIGITAL
 #    url: https://github.com/RealDeco/SendspinZero.git
 #    ref: main
 #    refresh: 0s
 #    files:
-#      - digital_speaker_config.yaml
+#      - configs/digital_speaker_config.yaml
 
 ## END OF SETTINGS ###############################################################################################################################
 
