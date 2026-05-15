@@ -1,7 +1,6 @@
-## SendspinZero for Analog + Digital Coax and Toslink versions with a display. Edit the settings below.
-
+## SendspinZero Display Digital version
 substitutions:
-  name: esphome-web-09a588
+  name: sendspinzero-display
   friendly_name: Sendspin Zero Display
 
 ## SETTINGS ######################################################################################################################################
@@ -11,6 +10,8 @@ substitutions:
 
   # your home assistant weather entity, in most cases the same.
   ha_weather_entity: weather.forecast_home
+
+  media_sample_rate: 44100
 
   # Rotating the display, uncomment the block you need (default 0 degree)
 
@@ -36,34 +37,16 @@ external_components:
     components: [generic_image, sendspin]
     refresh: 1h
 
-## AUDIO SETTINGS ################################################################################################################################
-
-packages:
-
-#  hw: #ANALOG
-#    url: https://github.com/RealDeco/SendspinZero.git
-#    ref: main
-#    refresh: 0s
-#    files:
-#      - configs/analog_speaker_config.yaml
-
-  hw: #DIGITAL
-    url: https://github.com/RealDeco/SendspinZero.git
-    ref: main
-    refresh: 0s
-    files:
-      - configs/digital_speaker_config.yaml
-
 ## END OF SETTINGS ###############################################################################################################################
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   min_version: 2026.5.0
-  name_add_mac_suffix: false
+  name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "0.0.0"
+    version: "2026.5.0"
   on_boot:
     priority: -100
     then:
@@ -92,10 +75,9 @@ ota:
   - platform: esphome
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
   ap:
-    password: "RZ7D3EzJdPM6"
+
+improv_serial:
 
 psram:
   mode: quad
@@ -156,6 +138,41 @@ generic_image:
 sendspin:
   id: sendspin_hub
   task_stack_in_psram: false
+
+i2s_audio:
+  - id: i2s_audio_bus
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    sample_rate: ${media_sample_rate}
+    i2s_dout_pin: GPIO4
+    spdif_mode: true
+    i2s_audio_id: i2s_audio_bus
+    dac_type: external
+    channel: stereo
+    use_apll: true
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: box_speaker
+    num_channels: 2
+    task_stack_in_psram: true
+    source_speakers:
+      - id: announcement_mixing_input
+      - id: media_mixing_input
+
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
 
 audio_file:
   - id: ready_sound
