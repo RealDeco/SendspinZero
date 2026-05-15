@@ -85,6 +85,7 @@ external_components:
 ## AUDIO SETTINGS ################################################################################################################################
 
 packages:
+
   hw: #ANALOG
     url: https://github.com/RealDeco/SendspinZero.git
     ref: main
