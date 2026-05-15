@@ -48,6 +48,7 @@ ota:
     id: ota_esphome
 
 wifi:
+  output_power: 8.5dB
   ap:
 
 improv_serial:
