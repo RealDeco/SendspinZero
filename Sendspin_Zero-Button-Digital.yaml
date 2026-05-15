@@ -2,7 +2,7 @@
 substitutions:
   name: sendspinzero-button
   friendly_name: Sendspin Zero Button
-  media_sample_rate: 48000
+  media_sample_rate: 44100
   startup_sound_file: Home_Connected
 
 esphome:
