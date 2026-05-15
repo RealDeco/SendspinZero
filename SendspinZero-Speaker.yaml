@@ -17,6 +17,9 @@ esphome:
   friendly_name: ${friendly_name}
   min_version: 2026.5.0
   name_add_mac_suffix: false
+  project:
+    name: realdeco.sendspin_zero
+    version: "0.0.0"
   on_boot:
     priority: -100
     then:
@@ -54,12 +57,6 @@ psram:
   speed: 80MHz
 
 captive_portal:
-
-external_components:
-
-  - source: github://pr#16057
-    components: [generic_image, sendspin]
-    refresh: 1h
 
 sendspin:
   id: sendspin_hub
