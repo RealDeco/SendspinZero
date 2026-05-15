@@ -19,6 +19,80 @@ That gives a total of **9 variants**:
 
 ---
 
+<div align="center">
+
+## Firmware Installers
+
+<table>
+  <tr>
+    <th>Device / Configuration</th>
+    <th>Installer</th>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Button Analog</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Button-Analog/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Button Digital</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Button-Digital/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Display Analog</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Display-Analog/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Display Digital</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Display-Digital/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero No Display Analog</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-NO_Display-Analog/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero No Display Digital</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-NO_Display-Digital/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>SendspinZero Speaker</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/SendspinZero-Speaker/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Supermini Headphones</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Supermini-Headphones/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+</table>
+
+<br>
+
+The following devices require manual compiling to change the device control functions.
+
+<table>
+  <tr>
+    <th>Device / Configuration</th>
+    <th>Installer</th>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Control Analog</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Control-Analog/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Control Digital</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Control-Digital/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Display + Button Analog</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Display_Button-Analog/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Zero Display + Button, No Audio</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Display_Button-NO-Audio/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+</table>
+
+</div>
+
+---
+
 ## About the Project
 
 This started as a fun experiment: I wanted to see if the **ESP32-S3 Zero** would work with Sendspin. Since it has **2 MB of PSRAM**, I figured it *might* be possible—and it turns out, it is.
