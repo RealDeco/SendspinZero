@@ -2,9 +2,6 @@ name: Publish firmware pages
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -61,9 +58,9 @@ jobs:
           echo "Firmware version: $FW_VERSION"
           echo "Created stub secrets.yaml"
 
-          configs=(*.yaml)
+          configs=(Sendspin*.yaml)
           if [ ${#configs[@]} -eq 0 ]; then
-            echo "No config files found."
+            echo "No firmware config files found."
             exit 1
           fi
 
