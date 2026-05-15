@@ -3,9 +3,9 @@
 
 <img width="1500" height="603" alt="Screenshot" src="https://github.com/user-attachments/assets/cf58463a-1112-4aff-8982-a297d2f72e1a" />
 
-A tiny Sendspin media player with **cover art display** and a **weather clock**, built around the **ESP32-S3 Zero**.
+A tiny [Sendspin](https://www.sendspin-audio.com) media player with **cover art display** and a **weather clock**, built around the **ESP32-S3 Zero**.
 
-This project turns a small, inexpensive ESP32 board into a compact **audio receiver** for your amplifier, with a screen for album art, **song**, **artist**, and a weather clock when not playing, OR a Button to control with, or with nothing so you can hide it behind the tv/stereo.
+This project turns a small, inexpensive ESP32 board into a compact **audio receiver** for your amplifier capable of doing multi-room audio in sync, with a screen for album art, **song**, **artist**, and a weather clock when not playing, OR a Button to control with, or with nothing so you can hide it behind the tv/stereo.
 
 Each version can be built with one of these options:
 
