@@ -1,6 +1,6 @@
 ## SendspinZero NO Display for Analog + Digital Coax and Toslink versions WITHOUT display. Edit the settings below.
 substitutions:
-  name: esphome-web-2ac440
+  name: sendspin-headphones
   friendly_name: Sendspin-Headphones
 
 ## SETTINGS ######################################################################################################################################
@@ -8,46 +8,7 @@ substitutions:
   # Startup sound, options are: Home_Connected or Home_Connected_Male
   startup_sound_file: Home_Connected
 
-  # your home assistant weather entity, in most cases the same.
-  ha_weather_entity: weather.forecast_home
-
   media_sample_rate: 48000
-
-## AUDIO SETTINGS ################################################################################################################################
-
-i2s_audio:
-  - id: i2s_audio_bus
-    i2s_lrclk_pin: GPIO5
-    i2s_bclk_pin: GPIO7
-
-speaker:
-  - platform: i2s_audio
-    id: box_speaker
-    i2s_audio_id: i2s_audio_bus
-    i2s_dout_pin: GPIO6
-    dac_type: external
-    channel: stereo
-
-  - platform: mixer
-    id: mixing_speaker
-    output_speaker: box_speaker
-    num_channels: 2
-    task_stack_in_psram: true
-    source_speakers:
-      - id: announcement_mixing_input
-      - id: media_mixing_input
-
-  - platform: resampler
-    id: announcement_resampling_speaker
-    output_speaker: announcement_mixing_input
-    sample_rate: ${media_sample_rate}
-    bits_per_sample: 16
-
-  - platform: resampler
-    id: media_resampling_speaker
-    output_speaker: media_mixing_input
-    sample_rate: ${media_sample_rate}
-    bits_per_sample: 16
 
 ## END OF SETTINGS ###############################################################################################################################
 
@@ -55,7 +16,7 @@ esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   min_version: 2026.5.0
-  name_add_mac_suffix: false
+  name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
     version: "0.0.0"
@@ -84,13 +45,14 @@ api:
 
 ota:
   - platform: esphome
+    id: ota_esphome
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  output_power: 8.5dB
   ap:
-    password: "RZ7D3EzJdPM6"
+
+improv_serial:
+
+captive_portal:
 
 psram:
   mode: quad
@@ -149,11 +111,43 @@ binary_sensor:
                     - lambda: id(single_click_pending) = true;
                     - script.execute: single_click_timer
 
-captive_portal:
-
 sendspin:
   id: sendspin_hub
   task_stack_in_psram: false
+
+i2s_audio:
+  - id: i2s_audio_bus
+    i2s_lrclk_pin: GPIO5
+    i2s_bclk_pin: GPIO7
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    i2s_audio_id: i2s_audio_bus
+    i2s_dout_pin: GPIO6
+    dac_type: external
+    channel: stereo
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: box_speaker
+    num_channels: 2
+    task_stack_in_psram: true
+    source_speakers:
+      - id: announcement_mixing_input
+      - id: media_mixing_input
+
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
 
 audio_file:
   - id: ready_sound
