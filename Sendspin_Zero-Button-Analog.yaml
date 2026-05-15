@@ -11,14 +11,6 @@ substitutions:
   # your home assistant weather entity, in most cases the same.
   ha_weather_entity: weather.forecast_home
 
-## SENDSPIN SETTINGS #############################################################################################################################
-
-external_components:
-
-  - source: github://pr#16057
-    components: [generic_image, sendspin]
-    refresh: 1h
-
 ## AUDIO SETTINGS ################################################################################################################################
 
 packages:
@@ -44,6 +36,9 @@ esphome:
   friendly_name: ${friendly_name}
   min_version: 2026.5.0
   name_add_mac_suffix: false
+  project:
+    name: realdeco.sendspin_zero
+    version: "0.0.0"
   on_boot:
     priority: -100
     then:
