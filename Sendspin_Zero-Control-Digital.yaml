@@ -1,73 +1,25 @@
 substitutions:
-  name: esphome-web-e83240
+  name: sendspinzero-control
   friendly_name: Sendspin Zero Control
 
 ## SETTINGS ######################################################################################################################################
 
-  # Startup sound, options are: Home_Connected or Home_Connected_Male
-  startup_sound_file: Home_Connected
+  ## Startup sound, options are: Home_Connected or Home_Connected_Male
+  startup_sound_file: popup # Home_Connected, popup, available, Server_Connected
 
-  # your home assistant weather entity, in most cases the same.
-  ha_weather_entity: weather.forecast_home
+  ## Sample rate for DAC
+  media_sample_rate: 44100
 
-  # Light entity or group to be controlled by the rotary knob
-  # for this to work You also need to enable “Allow the device to perform Home Assistant actions” for this ESPHome device in Home Assistant.
-  control_device_1: light.ceiling
-  control_devicename_1: "Ceiling 1"
-  control_device_2: light.ceiling_2
-  control_devicename_2: "Ceiling 2"
-  control_device_3: light.desklight_light
-  control_devicename_3: "Desk Light"
-  control_device_4: light.hue_p45_7_light
-  control_devicename_4: "Prt. Light"
-  control_device_5: light.hue_p45_8_light
-  control_devicename_5: "Blue Lamp"
-  control_device_6: light.livingroom_all_lights
-  control_devicename_6: "All Light"
+## ROTATION: THIS PART IS ONLY NEEDED IF YOU TURNED DISPLAY AROUND IN CASE #######################################################################
 
-  # Home Assistant button entity triggered by normal-button triple click.
-  favorite_button_entity: button.sensspin_zero_control_favorite_current_song
-
-  # Home Assistant Media Player entity for playing streams (e.g. via Music Assistant)
-  ha_media_player_entity: media_player.sensspin_zero_control
-
-  # Media Menu Items Configuration
-  media_item_count: "6" # Increase this when adding more items below (max 10)
-
-  # Media links and names for menu
-  media_name_1: "Random 500"
-  media_url_1: "library://playlist/45"
-  media_name_2: "Neil Diamond"
-  media_url_2: "library://playlist/72"
-  media_name_3: "Tommy Steele"
-  media_url_3: "library://playlist/68"
-  media_name_4: "Radio: P5"
-  media_url_4: "https://live-icy.gss.dr.dk/A/A25L.mp3"
-  media_name_5: "Radio: Boost"
-  media_url_5: "http://6434.cloudrad.io:8066/live"
-  media_name_6: "Radio: Smooth Chill"
-  media_url_6: "https://ice-sov.musicradio.com/SmoothChillMP3"
-
-  # Available slots for future expansion (up to 10)
-  media_name_7: "Unused 7"
-  media_url_7: "unused"
-  media_name_8: "Unused 8"
-  media_url_8: "unused"
-  media_name_9: "Unused 9"
-  media_url_9: "unused"
-  media_name_10: "Unused 10"
-  media_url_10: "unused"
-
-## ROTATIO: THIS PART IS ONLY NEEDED IF YOU TURNED DISPLAY AROUND IN CASE ########################################################################
-
-  # 0 degree (default)
+  ## 0 degree (default)
   display_swap_xy: "false"
   display_mirror_x: "false"
   display_mirror_y: "false"
   display_offset_width: "0"
   display_offset_height: "0"
 
-  # 180 degree
+  ## 180 degree
   # display_swap_xy: "false"
   # display_mirror_x: "true"
   # display_mirror_y: "true"
@@ -82,34 +34,13 @@ external_components:
     components: [generic_image, sendspin]
     refresh: 1h
 
-## AUDIO SETTINGS ################################################################################################################################
-
-packages:
-
-#  hw: #ANALOG
-#    url: https://github.com/RealDeco/SendspinZero.git
-#    ref: main
-#    refresh: 0s
-#    files:
-#      - configs/analog_speaker_config.yaml
-
-  hw: #DIGITAL
-    url: https://github.com/RealDeco/SendspinZero.git
-    ref: main
-    refresh: 0s
-    files:
-      - configs/digital_speaker_config.yaml
-
 ## END OF SETTINGS ###############################################################################################################################
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   min_version: 2026.5.0
-  name_add_mac_suffix: false
-  project:
-    name: realdeco.sendspin_zero
-    version: "0.0.0"
+  name_add_mac_suffix: true
   on_boot:
     priority: -100
     then:
@@ -123,8 +54,7 @@ esp32:
     type: esp-idf
 
 logger:
-  level: DEBUG
-  baud_rate: 0
+  level: WARN
 
 api:
   on_client_connected:
@@ -142,14 +72,14 @@ ota:
   - platform: esphome
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
   ap:
-    password: "RZ7D3EzJdPM6"
+
+improv_serial:
 
 psram:
   mode: quad
   speed: 80MHz
+  ignore_not_found: false
 
 captive_portal:
 
@@ -266,6 +196,41 @@ sendspin:
   id: sendspin_hub
   task_stack_in_psram: false
 
+i2s_audio:
+  - id: i2s_audio_bus
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    sample_rate: ${media_sample_rate}
+    i2s_dout_pin: GPIO4
+    spdif_mode: true
+    i2s_audio_id: i2s_audio_bus
+    dac_type: external
+    channel: stereo
+    use_apll: true
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: box_speaker
+    num_channels: 2
+    task_stack_in_psram: true
+    source_speakers:
+      - id: announcement_mixing_input
+      - id: media_mixing_input
+
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
 audio_file:
   - id: ready_sound
     file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
@@ -362,20 +327,17 @@ sensor:
     on_anticlockwise:
       - script.execute: rotary_ccw
 
-  - platform: homeassistant
+  - platform: template
     id: ha_weather_temperature
-    entity_id: ${ha_weather_entity}
-    attribute: temperature
+    internal: true
 
-  - platform: homeassistant
+  - platform: template
     id: ha_weather_wind_speed
-    entity_id: ${ha_weather_entity}
-    attribute: wind_speed
+    internal: true
 
 text_sensor:
-  - platform: homeassistant
+  - platform: template
     id: ha_weather_condition
-    entity_id: ${ha_weather_entity}
     on_value:
       - lambda: |-
           const char* icon = "\U000F0590";
@@ -405,53 +367,18 @@ text_sensor:
 
           lv_label_set_text(id(weather_icon_glow), icon);
           lv_label_set_text(id(weather_icon), icon);
-      - script.execute: fetch_daily_forecast
 
-  - platform: homeassistant
+  - platform: template
     id: ha_weather_temperature_unit
-    entity_id: ${ha_weather_entity}
-    attribute: temperature_unit
+    internal: true
+    lambda: |-
+      return std::string("\u00B0C");
 
-  - platform: homeassistant
+  - platform: template
     id: ha_weather_wind_speed_unit
-    entity_id: ${ha_weather_entity}
-    attribute: wind_speed_unit
-
-  - platform: homeassistant
-    id: control_device_1_brightness_text
-    entity_id: ${control_device_1}
-    attribute: brightness
     internal: true
-
-  - platform: homeassistant
-    id: control_device_2_brightness_text
-    entity_id: ${control_device_2}
-    attribute: brightness
-    internal: true
-
-  - platform: homeassistant
-    id: control_device_3_brightness_text
-    entity_id: ${control_device_3}
-    attribute: brightness
-    internal: true
-
-  - platform: homeassistant
-    id: control_device_4_brightness_text
-    entity_id: ${control_device_4}
-    attribute: brightness
-    internal: true
-
-  - platform: homeassistant
-    id: control_device_5_brightness_text
-    entity_id: ${control_device_5}
-    attribute: brightness
-    internal: true
-
-  - platform: homeassistant
-    id: control_device_6_brightness_text
-    entity_id: ${control_device_6}
-    attribute: brightness
-    internal: true
+    lambda: |-
+      return std::string("m/s");
 
   - platform: sendspin
     id: sendspin_title
@@ -553,7 +480,7 @@ text_sensor:
       if (!id(ha_weather_temperature).has_state()) return std::string("--");
 
       std::string tunit = id(ha_weather_temperature_unit).state.c_str();
-      if (tunit.empty()) tunit = "°C";
+      if (tunit.empty()) tunit = "\u00B0C";
       lv_label_set_text(id(weather_big_temp_unit), tunit.c_str());
 
       int ti = (int) lroundf(id(ha_weather_temperature).state);
@@ -578,7 +505,7 @@ text_sensor:
       }
 
       std::string tunit = id(ha_weather_temperature_unit).state.c_str();
-      if (tunit.empty()) tunit = "°C";
+      if (tunit.empty()) tunit = "\u00B0C";
 
       std::string wunit = id(ha_weather_wind_speed_unit).state.c_str();
       if (wunit.empty()) wunit = "m/s";
@@ -587,7 +514,7 @@ text_sensor:
       float wind_display = id(ha_weather_wind_speed).state;
 
       float temp_c = temp_display;
-      if (tunit == "°F" || tunit == "F") {
+      if (tunit == "\u00B0F" || tunit == "F") {
         temp_c = (temp_display - 32.0f) * 5.0f / 9.0f;
       }
 
@@ -608,7 +535,7 @@ text_sensor:
       }
 
       float feels_display = feels_c;
-      if (tunit == "°F" || tunit == "F") {
+      if (tunit == "\u00B0F" || tunit == "F") {
         feels_display = feels_c * 9.0f / 5.0f + 32.0f;
       }
 
@@ -697,7 +624,7 @@ font:
       weight: 700
     id: font_temp_unit
     size: 22
-    glyphs: "°CF-"
+    glyphs: "\u00B0CF-"
 
   - file:
       type: gfonts
@@ -747,125 +674,147 @@ script:
   - id: fetch_daily_forecast
     mode: restart
     then:
-      - homeassistant.action:
-          action: weather.get_forecasts
-          data:
-            entity_id: ${ha_weather_entity}
-            type: daily
-          capture_response: true
-          on_success:
-            - lambda: |-
-                auto icon_for_condition = [](const std::string &condition) -> const char* {
-                  if (condition == "sunny" || condition == "clear") return "\U000F0599";
-                  if (condition == "clear-night") return "\U000F0594";
-                  if (condition == "partlycloudy") return "\U000F0595";
-                  if (condition == "cloudy") return "\U000F0590";
-                  if (condition == "fog") return "\U000F0591";
-                  if (condition == "rainy") return "\U000F0597";
-                  if (condition == "pouring") return "\U000F0596";
-                  if (condition == "snowy") return "\U000F0598";
-                  if (condition == "lightning") return "\U000F0593";
-                  if (condition == "hail") return "\U000F0592";
-                  return "\U000F0590";
-                };
+      - if:
+          condition:
+            lambda: 'return !id(ha_weather_entity).state.empty();'
+          then:
+            - homeassistant.action:
+                action: weather.get_forecasts
+                data_template:
+                  entity_id: "{{ weather_entity }}"
+                  type: daily
+                variables:
+                  weather_entity: |-
+                    return id(ha_weather_entity).state;
+                capture_response: true
+                on_success:
+                  - lambda: |-
+                      auto icon_for_condition = [](const std::string &condition) -> const char* {
+                        if (condition == "sunny" || condition == "clear") return "\U000F0599";
+                        if (condition == "clear-night") return "\U000F0594";
+                        if (condition == "partlycloudy") return "\U000F0595";
+                        if (condition == "cloudy") return "\U000F0590";
+                        if (condition == "fog") return "\U000F0591";
+                        if (condition == "rainy") return "\U000F0597";
+                        if (condition == "pouring") return "\U000F0596";
+                        if (condition == "snowy") return "\U000F0598";
+                        if (condition == "lightning") return "\U000F0593";
+                        if (condition == "hail") return "\U000F0592";
+                        return "\U000F0590";
+                      };
 
-                auto weekday_from_iso = [](const char *iso_value, int fallback_offset) -> const char* {
-                  static const char* names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-                  if (iso_value == nullptr || iso_value[0] == '\0') {
-                    return names[(fallback_offset + 1) % 7];
-                  }
+                      auto weekday_from_iso = [](const char *iso_value, int fallback_offset) -> const char* {
+                        static const char* names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+                        if (iso_value == nullptr || iso_value[0] == '\0') {
+                          return names[(fallback_offset + 1) % 7];
+                        }
 
-                  int year = 0;
-                  int month = 0;
-                  int day = 0;
-                  if (sscanf(iso_value, "%d-%d-%d", &year, &month, &day) != 3) {
-                    return names[(fallback_offset + 1) % 7];
-                  }
-                  if (month < 1 || month > 12) {
-                    return names[(fallback_offset + 1) % 7];
-                  }
+                        int year = 0;
+                        int month = 0;
+                        int day = 0;
+                        if (sscanf(iso_value, "%d-%d-%d", &year, &month, &day) != 3) {
+                          return names[(fallback_offset + 1) % 7];
+                        }
+                        if (month < 1 || month > 12) {
+                          return names[(fallback_offset + 1) % 7];
+                        }
 
-                  static const int offsets[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
-                  if (month < 3) year -= 1;
-                  int day_index = (year + year / 4 - year / 100 + year / 400 + offsets[month - 1] + day) % 7;
-                  if (day_index < 0 || day_index > 6) {
-                    return names[(fallback_offset + 1) % 7];
-                  }
-                  return names[day_index];
-                };
+                        static const int offsets[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+                        if (month < 3) year -= 1;
+                        int day_index = (year + year / 4 - year / 100 + year / 400 + offsets[month - 1] + day) % 7;
+                        if (day_index < 0 || day_index > 6) {
+                          return names[(fallback_offset + 1) % 7];
+                        }
+                        return names[day_index];
+                      };
 
-                JsonArrayConst forecast = response["response"]["${ha_weather_entity}"]["forecast"].as<JsonArrayConst>();
-                if (forecast.isNull() || forecast.size() == 0) {
-                  lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
-                  ESP_LOGW("forecast", "No daily forecast data returned for ${ha_weather_entity}");
-                  return;
-                }
+                      std::string weather_entity = id(ha_weather_entity).state;
+                      JsonArrayConst forecast = response["response"][weather_entity]["forecast"].as<JsonArrayConst>();
+                      if (forecast.isNull() || forecast.size() == 0) {
+                        lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                        ESP_LOGW("forecast", "No daily forecast data returned for %s", weather_entity.c_str());
+                        return;
+                      }
 
-                lv_obj_t *day_labels[3] = {
-                  id(forecast_day_1),
-                  id(forecast_day_2),
-                  id(forecast_day_3),
-                };
-                lv_obj_t *icon_labels[3] = {
-                  id(forecast_icon_1),
-                  id(forecast_icon_2),
-                  id(forecast_icon_3),
-                };
-                lv_obj_t *temp_labels[3] = {
-                  id(forecast_temp_1),
-                  id(forecast_temp_2),
-                  id(forecast_temp_3),
-                };
+                      JsonObjectConst current = forecast[0].as<JsonObjectConst>();
+                      if (!current.isNull()) {
+                        const char *condition_value = current["condition"] | "";
+                        float current_temp = current["temperature"] | NAN;
+                        float current_wind = current["wind_speed"] | NAN;
+                        if (condition_value[0] != '\0') id(ha_weather_condition).publish_state(condition_value);
+                        if (!std::isnan(current_temp)) id(ha_weather_temperature).publish_state(current_temp);
+                        if (!std::isnan(current_wind)) id(ha_weather_wind_speed).publish_state(current_wind);
+                      }
 
-                size_t start_index = forecast.size() >= 4 ? 1 : 0;
-                std::string tunit = id(ha_weather_temperature_unit).state.c_str();
-                if (tunit.empty()) tunit = "°C";
+                      lv_obj_t *day_labels[3] = {
+                        id(forecast_day_1),
+                        id(forecast_day_2),
+                        id(forecast_day_3),
+                      };
+                      lv_obj_t *icon_labels[3] = {
+                        id(forecast_icon_1),
+                        id(forecast_icon_2),
+                        id(forecast_icon_3),
+                      };
+                      lv_obj_t *temp_labels[3] = {
+                        id(forecast_temp_1),
+                        id(forecast_temp_2),
+                        id(forecast_temp_3),
+                      };
 
-                bool rendered_any = false;
-                for (size_t i = 0; i < 3; i++) {
-                  size_t src_index = start_index + i;
-                  if (src_index >= forecast.size()) {
-                    lv_label_set_text(day_labels[i], "--");
-                    lv_label_set_text(icon_labels[i], "\U000F0590");
-                    lv_label_set_text(temp_labels[i], "--");
-                    continue;
-                  }
+                      size_t start_index = forecast.size() >= 4 ? 1 : 0;
+                      std::string tunit = id(ha_weather_temperature_unit).state.c_str();
+                      if (tunit.empty()) tunit = "\u00B0C";
 
-                  JsonObjectConst day = forecast[src_index].as<JsonObjectConst>();
-                  const char *datetime_value = day["datetime"] | "";
-                  const char *condition_value = day["condition"] | "cloudy";
-                  float high_temp = day["temperature"] | NAN;
-                  float low_temp = day["templow"] | high_temp;
+                      bool rendered_any = false;
+                      for (size_t i = 0; i < 3; i++) {
+                        size_t src_index = start_index + i;
+                        if (src_index >= forecast.size()) {
+                          lv_label_set_text(day_labels[i], "--");
+                          lv_label_set_text(icon_labels[i], "\U000F0590");
+                          lv_label_set_text(temp_labels[i], "--");
+                          continue;
+                        }
 
-                  lv_label_set_text(day_labels[i], weekday_from_iso(datetime_value, i));
-                  lv_label_set_text(icon_labels[i], icon_for_condition(std::string(condition_value)));
+                        JsonObjectConst day = forecast[src_index].as<JsonObjectConst>();
+                        const char *datetime_value = day["datetime"] | "";
+                        const char *condition_value = day["condition"] | "cloudy";
+                        float high_temp = day["temperature"] | NAN;
+                        float low_temp = day["templow"] | high_temp;
 
-                  if (std::isnan(high_temp)) {
-                    lv_label_set_text(temp_labels[i], "--");
-                  } else {
-                    char temp_buf[24];
-                    snprintf(
-                      temp_buf,
-                      sizeof(temp_buf),
-                      "%.0f/%.0f%s",
-                      high_temp,
-                      std::isnan(low_temp) ? high_temp : low_temp,
-                      tunit.c_str()
-                    );
-                    lv_label_set_text(temp_labels[i], temp_buf);
-                    rendered_any = true;
-                  }
-                }
+                        lv_label_set_text(day_labels[i], weekday_from_iso(datetime_value, i));
+                        lv_label_set_text(icon_labels[i], icon_for_condition(std::string(condition_value)));
 
-                if (rendered_any) {
-                  lv_obj_clear_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
-                } else {
-                  lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
-                }
-          on_error:
+                        if (std::isnan(high_temp)) {
+                          lv_label_set_text(temp_labels[i], "--");
+                        } else {
+                          char temp_buf[24];
+                          snprintf(
+                            temp_buf,
+                            sizeof(temp_buf),
+                            "%.0f/%.0f%s",
+                            high_temp,
+                            std::isnan(low_temp) ? high_temp : low_temp,
+                            tunit.c_str()
+                          );
+                          lv_label_set_text(temp_labels[i], temp_buf);
+                          rendered_any = true;
+                        }
+                      }
+
+                      if (rendered_any) {
+                        lv_obj_clear_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                      } else {
+                        lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                      }
+                on_error:
+                  - lambda: |-
+                      lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
+                      ESP_LOGW("forecast", "weather.get_forecasts failed for %s", id(ha_weather_entity).state.c_str());
+          else:
             - lambda: |-
                 lv_obj_add_flag(id(forecast_strip), LV_OBJ_FLAG_HIDDEN);
-                ESP_LOGW("forecast", "weather.get_forecasts failed for ${ha_weather_entity}");
+                ESP_LOGW("forecast", "No weather entity configured");
 
   - id: rotary_cw
     mode: restart
@@ -875,7 +824,7 @@ script:
             lambda: 'return id(media_menu_active);'
           then:
             - lambda: |-
-                int max_items = atoi("${media_item_count}");
+                int max_items = (int) lroundf(id(media_item_count).state);
                 if (max_items < 1) max_items = 1;
                 if (max_items > 10) max_items = 10;
                 if (id(media_menu_cursor) < 1 || id(media_menu_cursor) > max_items) {
@@ -949,7 +898,7 @@ script:
             lambda: 'return id(media_menu_active);'
           then:
             - lambda: |-
-                int max_items = atoi("${media_item_count}");
+                int max_items = (int) lroundf(id(media_item_count).state);
                 if (max_items < 1) max_items = 1;
                 if (max_items > 10) max_items = 10;
                 if (id(media_menu_cursor) < 1 || id(media_menu_cursor) > max_items) {
@@ -1067,12 +1016,12 @@ script:
                 id: popup_title_idle
                 text: !lambda |-
                   const char *names[6] = {
-                    "${control_devicename_1}",
-                    "${control_devicename_2}",
-                    "${control_devicename_3}",
-                    "${control_devicename_4}",
-                    "${control_devicename_5}",
-                    "${control_devicename_6}",
+                    id(control_devicename_1).state.c_str(),
+                    id(control_devicename_2).state.c_str(),
+                    id(control_devicename_3).state.c_str(),
+                    id(control_devicename_4).state.c_str(),
+                    id(control_devicename_5).state.c_str(),
+                    id(control_devicename_6).state.c_str(),
                   };
                   int index = id(selected_control_index);
                   if (index < 1 || index > 6) index = 1;
@@ -1086,12 +1035,12 @@ script:
                 id: popup_title_sendspin
                 text: !lambda |-
                   const char *names[6] = {
-                    "${control_devicename_1}",
-                    "${control_devicename_2}",
-                    "${control_devicename_3}",
-                    "${control_devicename_4}",
-                    "${control_devicename_5}",
-                    "${control_devicename_6}",
+                    id(control_devicename_1).state.c_str(),
+                    id(control_devicename_2).state.c_str(),
+                    id(control_devicename_3).state.c_str(),
+                    id(control_devicename_4).state.c_str(),
+                    id(control_devicename_5).state.c_str(),
+                    id(control_devicename_6).state.c_str(),
                   };
                   int index = id(selected_control_index);
                   if (index < 1 || index > 6) index = 1;
@@ -1162,27 +1111,7 @@ script:
           if (id(selected_control_index) < 1 || id(selected_control_index) > 6) {
             id(selected_control_index) = 1;
           }
-
-          std::string bri_s;
-          if (id(selected_control_index) == 2) {
-            bri_s = id(control_device_2_brightness_text).state;
-          } else if (id(selected_control_index) == 3) {
-            bri_s = id(control_device_3_brightness_text).state;
-          } else if (id(selected_control_index) == 4) {
-            bri_s = id(control_device_4_brightness_text).state;
-          } else if (id(selected_control_index) == 5) {
-            bri_s = id(control_device_5_brightness_text).state;
-          } else if (id(selected_control_index) == 6) {
-            bri_s = id(control_device_6_brightness_text).state;
-          } else {
-            bri_s = id(control_device_1_brightness_text).state;
-          }
-          if (!bri_s.empty() && bri_s != "None" && bri_s != "unknown" && bri_s != "unavailable") {
-            int bri = atoi(bri_s.c_str());
-            if (bri < 0) bri = 0;
-            if (bri > 255) bri = 255;
-            id(knob_control_pct) = (int) lroundf((bri * 100.0f) / 255.0f);
-          } else {
+          if (id(knob_control_pct) < 0 || id(knob_control_pct) > 100) {
             id(knob_control_pct) = 0;
           }
       - script.execute: render_popup
@@ -1233,12 +1162,12 @@ script:
     then:
       - lambda: |-
           const char *labels[6] = {
-            "${control_devicename_1}",
-            "${control_devicename_2}",
-            "${control_devicename_3}",
-            "${control_devicename_4}",
-            "${control_devicename_5}",
-            "${control_devicename_6}",
+            id(control_devicename_1).state.c_str(),
+            id(control_devicename_2).state.c_str(),
+            id(control_devicename_3).state.c_str(),
+            id(control_devicename_4).state.c_str(),
+            id(control_devicename_5).state.c_str(),
+            id(control_devicename_6).state.c_str(),
           };
           lv_obj_t *idle_items[6] = {
             id(control_menu_idle_item_1),
@@ -1329,15 +1258,17 @@ script:
     mode: restart
     then:
       - lambda: |-
-          int count = atoi("${media_item_count}");
+          int count = (int) lroundf(id(media_item_count).state);
           if (count < 1) count = 1;
           if (count > 10) count = 10;
           if (id(media_menu_cursor) < 1 || id(media_menu_cursor) > count) {
             id(media_menu_cursor) = 1;
           }
           const char *labels[10] = {
-            "${media_name_1}", "${media_name_2}", "${media_name_3}", "${media_name_4}", "${media_name_5}",
-            "${media_name_6}", "${media_name_7}", "${media_name_8}", "${media_name_9}", "${media_name_10}"
+            id(media_name_1).state.c_str(), id(media_name_2).state.c_str(), id(media_name_3).state.c_str(),
+            id(media_name_4).state.c_str(), id(media_name_5).state.c_str(), id(media_name_6).state.c_str(),
+            id(media_name_7).state.c_str(), id(media_name_8).state.c_str(), id(media_name_9).state.c_str(),
+            id(media_name_10).state.c_str()
           };
           lv_obj_t *idle_items[10] = {
             id(media_menu_idle_item_1), id(media_menu_idle_item_2), id(media_menu_idle_item_3),
@@ -1479,13 +1410,6 @@ script:
                       condition:
                         lambda: 'return id(media_button_click_count) >= 4;'
                       then:
-                        - logger.log:
-                            level: WARN
-                            format: "Favorite activated from media button 4-click"
-                        - homeassistant.action:
-                            action: button.press
-                            data:
-                              entity_id: ${favorite_button_entity}
                         - lambda: |-
                             id(media_button_click_count) = 0;
                       else:
@@ -1536,22 +1460,44 @@ script:
   - id: select_media_menu_item
     mode: restart
     then:
-      - homeassistant.action:
-          action: media_player.play_media
-          data:
-            entity_id: ${ha_media_player_entity}
-            media_content_type: music
-          data_template:
-            media_content_id: "{{ media_url }}"
-          variables:
-            media_url: |-
+      - if:
+          condition:
+            lambda: |-
               const char *urls[10] = {
-                "${media_url_1}", "${media_url_2}", "${media_url_3}", "${media_url_4}", "${media_url_5}",
-                "${media_url_6}", "${media_url_7}", "${media_url_8}", "${media_url_9}", "${media_url_10}"
+                id(media_url_1).state.c_str(), id(media_url_2).state.c_str(), id(media_url_3).state.c_str(),
+                id(media_url_4).state.c_str(), id(media_url_5).state.c_str(), id(media_url_6).state.c_str(),
+                id(media_url_7).state.c_str(), id(media_url_8).state.c_str(), id(media_url_9).state.c_str(),
+                id(media_url_10).state.c_str()
               };
               int cursor = id(media_menu_cursor);
-              if (cursor < 1 || cursor > 10) return std::string("");
-              return std::string(urls[cursor - 1]);
+              if (cursor < 1 || cursor > 10) return false;
+              std::string url = urls[cursor - 1];
+              std::string player = id(ha_media_player_entity).state;
+              return !player.empty() && !url.empty() && url != "unused";
+          then:
+            - homeassistant.action:
+                action: media_player.play_media
+                data_template:
+                  entity_id: "{{ target_entity }}"
+                  media_content_type: music
+                  media_content_id: "{{ media_url }}"
+                variables:
+                  target_entity: |-
+                    return id(ha_media_player_entity).state;
+                  media_url: |-
+                    const char *urls[10] = {
+                      id(media_url_1).state.c_str(), id(media_url_2).state.c_str(), id(media_url_3).state.c_str(),
+                      id(media_url_4).state.c_str(), id(media_url_5).state.c_str(), id(media_url_6).state.c_str(),
+                      id(media_url_7).state.c_str(), id(media_url_8).state.c_str(), id(media_url_9).state.c_str(),
+                      id(media_url_10).state.c_str()
+                    };
+                    int cursor = id(media_menu_cursor);
+                    if (cursor < 1 || cursor > 10) return std::string("");
+                    return std::string(urls[cursor - 1]);
+          else:
+            - logger.log:
+                level: WARN
+                format: "Selected media item or media player has no Home Assistant entity configured"
       - script.execute: hide_media_menu
 
   - id: apply_knob_to_light
@@ -1559,49 +1505,68 @@ script:
     then:
       - if:
           condition:
-            lambda: 'return id(knob_control_pct) <= 0;'
+            lambda: |-
+              const char *entities[6] = {
+                id(control_device_1).state.c_str(),
+                id(control_device_2).state.c_str(),
+                id(control_device_3).state.c_str(),
+                id(control_device_4).state.c_str(),
+                id(control_device_5).state.c_str(),
+                id(control_device_6).state.c_str(),
+              };
+              int index = id(selected_control_index);
+              if (index < 1 || index > 6) index = 1;
+              return std::string(entities[index - 1]) != "";
           then:
-            - homeassistant.action:
-                action: light.turn_off
-                data_template:
-                  entity_id: "{{ target_entity }}"
-                variables:
-                  target_entity: |-
-                    const char *entities[6] = {
-                      "${control_device_1}",
-                      "${control_device_2}",
-                      "${control_device_3}",
-                      "${control_device_4}",
-                      "${control_device_5}",
-                      "${control_device_6}",
-                    };
-                    int index = id(selected_control_index);
-                    if (index < 1 || index > 6) index = 1;
-                    return std::string(entities[index - 1]);
+            - if:
+                condition:
+                  lambda: 'return id(knob_control_pct) <= 0;'
+                then:
+                  - homeassistant.action:
+                      action: light.turn_off
+                      data_template:
+                        entity_id: "{{ target_entity }}"
+                      variables:
+                        target_entity: |-
+                          const char *entities[6] = {
+                            id(control_device_1).state.c_str(),
+                            id(control_device_2).state.c_str(),
+                            id(control_device_3).state.c_str(),
+                            id(control_device_4).state.c_str(),
+                            id(control_device_5).state.c_str(),
+                            id(control_device_6).state.c_str(),
+                          };
+                          int index = id(selected_control_index);
+                          if (index < 1 || index > 6) index = 1;
+                          return std::string(entities[index - 1]);
+                else:
+                  - homeassistant.action:
+                      action: light.turn_on
+                      data_template:
+                        entity_id: "{{ target_entity }}"
+                        brightness: "{{ brightness_value }}"
+                      variables:
+                        target_entity: |-
+                          const char *entities[6] = {
+                            id(control_device_1).state.c_str(),
+                            id(control_device_2).state.c_str(),
+                            id(control_device_3).state.c_str(),
+                            id(control_device_4).state.c_str(),
+                            id(control_device_5).state.c_str(),
+                            id(control_device_6).state.c_str(),
+                          };
+                          int index = id(selected_control_index);
+                          if (index < 1 || index > 6) index = 1;
+                          return std::string(entities[index - 1]);
+                        brightness_value: |-
+                          int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
+                          if (bri < 1) bri = 1;
+                          if (bri > 255) bri = 255;
+                          return bri;
           else:
-            - homeassistant.action:
-                action: light.turn_on
-                data_template:
-                  entity_id: "{{ target_entity }}"
-                  brightness: "{{ brightness_value }}"
-                variables:
-                  target_entity: |-
-                    const char *entities[6] = {
-                      "${control_device_1}",
-                      "${control_device_2}",
-                      "${control_device_3}",
-                      "${control_device_4}",
-                      "${control_device_5}",
-                      "${control_device_6}",
-                    };
-                    int index = id(selected_control_index);
-                    if (index < 1 || index > 6) index = 1;
-                    return std::string(entities[index - 1]);
-                  brightness_value: |-
-                    int bri = (int) lroundf(id(knob_control_pct) * 255.0f / 100.0f);
-                    if (bri < 1) bri = 1;
-                    if (bri > 255) bri = 255;
-                    return bri;
+            - logger.log:
+                level: WARN
+                format: "Selected control item has no Home Assistant entity configured"
 
   - id: play_sound
     parameters:
@@ -1654,6 +1619,396 @@ interval:
   - interval: 10min
     then:
       - script.execute: fetch_daily_forecast
+
+number:
+  - platform: template
+    id: media_item_count
+    name: Media Item Count
+    icon: "mdi:playlist-music"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: 6
+    min_value: 1
+    max_value: 10
+    step: 1
+
+text:
+  - platform: template
+    id: ha_weather_entity
+    name: Home Assistant Weather Entity
+    icon: "mdi:weather-partly-cloudy"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "weather.forecast_home"
+    max_length: 128
+    mode: text
+    on_value:
+      - script.execute: fetch_daily_forecast
+
+  - platform: template
+    id: ha_media_player_entity
+    name: Home Assistant Media Player Entity
+    icon: "mdi:speaker"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "media_player.sensspin_zero_control"
+    max_length: 128
+    mode: text
+
+  - platform: template
+    id: control_devicename_1
+    name: Control 1 Name
+    icon: "mdi:label-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Ceiling 1"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: control_device_1
+    name: Control 1 Entity
+    icon: "mdi:lightbulb-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "light.ceiling"
+    max_length: 128
+    mode: text
+
+  - platform: template
+    id: control_devicename_2
+    name: Control 2 Name
+    icon: "mdi:label-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Ceiling 2"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: control_device_2
+    name: Control 2 Entity
+    icon: "mdi:lightbulb-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "light.ceiling_2"
+    max_length: 128
+    mode: text
+
+  - platform: template
+    id: control_devicename_3
+    name: Control 3 Name
+    icon: "mdi:label-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Desk Light"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: control_device_3
+    name: Control 3 Entity
+    icon: "mdi:lightbulb-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "light.desklight_light"
+    max_length: 128
+    mode: text
+
+  - platform: template
+    id: control_devicename_4
+    name: Control 4 Name
+    icon: "mdi:label-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Prt. Light"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: control_device_4
+    name: Control 4 Entity
+    icon: "mdi:lightbulb-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "light.hue_p45_7_light"
+    max_length: 128
+    mode: text
+
+  - platform: template
+    id: control_devicename_5
+    name: Control 5 Name
+    icon: "mdi:label-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Blue Lamp"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: control_device_5
+    name: Control 5 Entity
+    icon: "mdi:lightbulb-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "light.hue_p45_8_light"
+    max_length: 128
+    mode: text
+
+  - platform: template
+    id: control_devicename_6
+    name: Control 6 Name
+    icon: "mdi:label-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "All Light"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: control_device_6
+    name: Control 6 Entity
+    icon: "mdi:lightbulb-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "light.livingroom_all_lights"
+    max_length: 128
+    mode: text
+
+  - platform: template
+    id: media_name_1
+    name: Media 1 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Random 500"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_1
+    name: Media 1 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "library://playlist/45"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_2
+    name: Media 2 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Neil Diamond"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_2
+    name: Media 2 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "library://playlist/72"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_3
+    name: Media 3 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Tommy Steele"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_3
+    name: Media 3 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "library://playlist/68"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_4
+    name: Media 4 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Radio: P5"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_4
+    name: Media 4 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "https://live-icy.gss.dr.dk/A/A25L.mp3"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_5
+    name: Media 5 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Radio: Boost"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_5
+    name: Media 5 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "http://6434.cloudrad.io:8066/live"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_6
+    name: Media 6 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Radio: Smooth Chill"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_6
+    name: Media 6 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "https://ice-sov.musicradio.com/SmoothChillMP3"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_7
+    name: Media 7 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Unused 7"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_7
+    name: Media 7 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "unused"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_8
+    name: Media 8 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Unused 8"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_8
+    name: Media 8 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "unused"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_9
+    name: Media 9 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Unused 9"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_9
+    name: Media 9 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "unused"
+    max_length: 255
+    mode: text
+
+  - platform: template
+    id: media_name_10
+    name: Media 10 Name
+    icon: "mdi:music-box-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "Unused 10"
+    max_length: 64
+    mode: text
+
+  - platform: template
+    id: media_url_10
+    name: Media 10 URL
+    icon: "mdi:link-variant"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "unused"
+    max_length: 255
+    mode: text
 
 switch:
   - platform: template
@@ -2043,7 +2398,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 38
                   width: 196
-                  text: "  ${control_devicename_1}"
+                  text: "  Control 1"
                   text_color: 0x66CCFF
 
               - label:
@@ -2051,7 +2406,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 66
                   width: 196
-                  text: "  ${control_devicename_2}"
+                  text: "  Control 2"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2059,7 +2414,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 94
                   width: 196
-                  text: "  ${control_devicename_3}"
+                  text: "  Control 3"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2067,7 +2422,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 122
                   width: 196
-                  text: "  ${control_devicename_4}"
+                  text: "  Control 4"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2075,7 +2430,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 150
                   width: 196
-                  text: "  ${control_devicename_5}"
+                  text: "  Control 5"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2083,7 +2438,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 178
                   width: 196
-                  text: "  ${control_devicename_6}"
+                  text: "  Control 6"
                   text_color: 0xFFFFFF
 
         - obj:
@@ -2117,7 +2472,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 38
                   width: 196
-                  text: "  ${media_name_1}"
+                  text: "  Media 1"
                   text_color: 0xFFFF00
 
               - label:
@@ -2125,7 +2480,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 66
                   width: 196
-                  text: "  ${media_name_2}"
+                  text: "  Media 2"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2133,7 +2488,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 94
                   width: 196
-                  text: "  ${media_name_3}"
+                  text: "  Media 3"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2141,7 +2496,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 122
                   width: 196
-                  text: "  ${media_name_4}"
+                  text: "  Media 4"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2149,7 +2504,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 150
                   width: 196
-                  text: "  ${media_name_5}"
+                  text: "  Media 5"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2157,7 +2512,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 178
                   width: 196
-                  text: "  ${media_name_6}"
+                  text: "  Media 6"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2165,7 +2520,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 206
                   width: 196
-                  text: "  ${media_name_7}"
+                  text: "  Media 7"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2173,7 +2528,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 234
                   width: 196
-                  text: "  ${media_name_8}"
+                  text: "  Media 8"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2181,7 +2536,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 262
                   width: 196
-                  text: "  ${media_name_9}"
+                  text: "  Media 9"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2189,7 +2544,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 290
                   width: 196
-                  text: "  ${media_name_10}"
+                  text: "  Media 10"
                   text_color: 0xFFFFFF
 
     - id: sendspin_page
@@ -2312,7 +2667,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 38
                   width: 196
-                  text: "  ${control_devicename_1}"
+                  text: "  Control 1"
                   text_color: 0x66CCFF
 
               - label:
@@ -2320,7 +2675,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 66
                   width: 196
-                  text: "  ${control_devicename_2}"
+                  text: "  Control 2"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2328,7 +2683,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 94
                   width: 196
-                  text: "  ${control_devicename_3}"
+                  text: "  Control 3"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2336,7 +2691,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 122
                   width: 196
-                  text: "  ${control_devicename_4}"
+                  text: "  Control 4"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2344,7 +2699,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 150
                   width: 196
-                  text: "  ${control_devicename_5}"
+                  text: "  Control 5"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2352,7 +2707,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 178
                   width: 196
-                  text: "  ${control_devicename_6}"
+                  text: "  Control 6"
                   text_color: 0xFFFFFF
 
         - obj:
@@ -2386,7 +2741,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 38
                   width: 196
-                  text: "  ${media_name_1}"
+                  text: "  Media 1"
                   text_color: 0xFFFF00
 
               - label:
@@ -2394,7 +2749,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 66
                   width: 196
-                  text: "  ${media_name_2}"
+                  text: "  Media 2"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2402,7 +2757,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 94
                   width: 196
-                  text: "  ${media_name_3}"
+                  text: "  Media 3"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2410,7 +2765,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 122
                   width: 196
-                  text: "  ${media_name_4}"
+                  text: "  Media 4"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2418,7 +2773,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 150
                   width: 196
-                  text: "  ${media_name_5}"
+                  text: "  Media 5"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2426,7 +2781,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 178
                   width: 196
-                  text: "  ${media_name_6}"
+                  text: "  Media 6"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2434,7 +2789,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 206
                   width: 196
-                  text: "  ${media_name_7}"
+                  text: "  Media 7"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2442,7 +2797,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 234
                   width: 196
-                  text: "  ${media_name_8}"
+                  text: "  Media 8"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2450,7 +2805,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 262
                   width: 196
-                  text: "  ${media_name_9}"
+                  text: "  Media 9"
                   text_color: 0xFFFFFF
 
               - label:
@@ -2458,7 +2813,7 @@ lvgl:
                   align: TOP_LEFT
                   y: 290
                   width: 196
-                  text: "  ${media_name_10}"
+                  text: "  Media 10"
                   text_color: 0xFFFFFF
 
 binary_sensor:
