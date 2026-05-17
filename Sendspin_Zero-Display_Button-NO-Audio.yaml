@@ -1,5 +1,5 @@
 substitutions:
-  name: esphome-web-f084b8
+  name: sendspinzero-display-button
   friendly_name: Sendspin Zero Display Button
 
   ha_weather_entity: weather.forecast_home
@@ -43,7 +43,7 @@ esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   min_version: 2026.5.0
-  name_add_mac_suffix: false
+  name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
     version: "2026.5.0"
