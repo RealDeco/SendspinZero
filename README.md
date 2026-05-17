@@ -58,23 +58,6 @@ That gives a total of **9 variants**:
 
 <table>
   <tr>
-    <td><strong>SendspinZero Speaker</strong></td>
-    <td><a href="https://realdeco.github.io/SendspinZero/SendspinZero-Speaker/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
-  </tr>
-  <tr>
-    <td><strong>Sendspin Supermini Headphones</strong></td>
-    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Supermini-Headphones/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
-  </tr>
-</table>
-
-<br>
-
-<table>
-  <tr>
-    <th>Device / Configuration</th>
-    <th>Installer</th>
-  </tr>
-  <tr>
     <td><strong>Sendspin Zero Control Analog</strong></td>
     <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Control-Analog/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
   </tr>
@@ -89,6 +72,19 @@ That gives a total of **9 variants**:
   <tr>
     <td><strong>Sendspin Zero Display + Button, No Audio</strong></td>
     <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Display_Button-NO-Audio/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+</table>
+
+<br>
+
+<table>
+  <tr>
+    <td><strong>SendspinZero Speaker</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/SendspinZero-Speaker/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+  <tr>
+    <td><strong>Sendspin Supermini Headphones</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Supermini-Headphones/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
   </tr>
 </table>
 
