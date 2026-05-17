@@ -73,6 +73,8 @@ ota:
 wifi:
   ap:
 
+improv_serial:
+
 psram:
   mode: quad
   speed: 80MHz
