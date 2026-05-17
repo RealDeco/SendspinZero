@@ -1,6 +1,6 @@
 substitutions:
-  name: sendspinzero-display-button
-  friendly_name: Sendspin Zero Display Button
+  name: zero-display-button
+  friendly_name: Zero Display Button
 
   ha_weather_entity: weather.forecast_home
 
