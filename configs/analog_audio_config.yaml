@@ -1,7 +1,5 @@
 substitutions:
   startup_sound_file: Home_Connected
-  display_state_player: external_media_player
-  api_connected_script: api_connected_actions_audio
 
 globals:
   - id: boot_sound_played
