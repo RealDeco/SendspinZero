@@ -47,13 +47,6 @@ jobs:
           set -uo pipefail
           shopt -s nullglob
 
-          cat > secrets.yaml <<'EOF'
-          wifi_ssid: "SendspinZero Setup"
-          wifi_password: "sendspinzero"
-          api_encryption_key: "0000000000000000000000000000000000000000000="
-          ota_password: "sendspinzero"
-          EOF
-
           echo "Pages base URL: $PAGES_BASE_URL"
           echo "Firmware version: $FW_VERSION"
           echo "Created stub secrets.yaml"
