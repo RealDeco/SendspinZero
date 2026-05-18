@@ -70,7 +70,7 @@ jobs:
             echo "Output: site/$name"
             echo "Publish URL: ${PAGES_BASE_URL%/}/$name"
 
-            if uvx ewt-gen==1.4.2 --dev "$config" \
+            if uvx ewt-gen==1.4.2 --pre-release "$config" \
               -t "$name" \
               -o "site/$name" \
               --publish-url "${PAGES_BASE_URL%/}/$name" \
