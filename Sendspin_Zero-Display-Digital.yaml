@@ -11,7 +11,7 @@ substitutions:
   # your home assistant weather entity, in most cases the same.
   ha_weather_entity: weather.forecast_home
 
-  media_sample_rate: 44100
+  media_sample_rate: 48000
 
   # Rotating the display, uncomment the block you need (default 0 degree)
 
@@ -272,7 +272,6 @@ text_sensor:
           } else if (c == "hail") {
             icon = "\U000F0592";
           }
-          lv_label_set_text(id(weather_icon_glow), icon);
           lv_label_set_text(id(weather_icon), icon);
   - platform: homeassistant
     id: ha_weather_temperature_unit
@@ -367,7 +366,7 @@ text_sensor:
     lambda: |-
       if (!id(ha_weather_temperature).has_state()) return std::string("--");
       std::string tunit = id(ha_weather_temperature_unit).state.c_str();
-      if (tunit.empty()) tunit = "°C";
+      if (tunit.empty()) tunit = "∞C";
       lv_label_set_text(id(weather_big_temp_unit), tunit.c_str());
       int ti = (int) lroundf(id(ha_weather_temperature).state);
       char buf[8];
@@ -390,7 +389,7 @@ text_sensor:
         return std::string("Weather unavailable");
       }
       std::string tunit = id(ha_weather_temperature_unit).state.c_str();
-      if (tunit.empty()) tunit = "°C";
+      if (tunit.empty()) tunit = "∞C";
       std::string wunit = id(ha_weather_wind_speed_unit).state.c_str();
       if (wunit.empty()) wunit = "m/s";
       float temp_c = id(ha_weather_temperature).state;
@@ -419,10 +418,6 @@ text_sensor:
           then:
             - lvgl.widget.show: weather_header
             - lvgl.widget.show: weather_label
-            - lvgl.widget.show: weather_label_glow
-            - lvgl.label.update:
-                id: weather_label_glow
-                text: !lambda return x;
             - lvgl.label.update:
                 id: weather_label
                 text: !lambda return x;
@@ -433,7 +428,6 @@ text_sensor:
                 then:
                   - lvgl.widget.hide: weather_header
                   - lvgl.widget.hide: weather_label
-                  - lvgl.widget.hide: weather_label_glow
 
 font:
   - file:
@@ -700,15 +694,6 @@ lvgl:
                   scrollable: false
                   widgets:
                     - label:
-                        id: weather_icon_glow
-                        align: CENTER
-                        x: -36
-                        y: 1
-                        text: "\U000F0590"
-                        text_color: 0x404040
-                        text_font: font_mdi_weather
-
-                    - label:
                         id: weather_icon
                         align: CENTER
                         x: -37
@@ -731,21 +716,9 @@ lvgl:
                         align: CENTER
                         x: 76
                         y: -14
-                        text: "°C"
+                        text: "∞C"
                         text_color: 0xFFFF00
                         text_font: font_temp_unit
-
-              - label:
-                  id: weather_label_glow
-                  align: TOP_MID
-                  x: 1
-                  y: 168
-                  width: 220
-                  text: "Weather..."
-                  text_color: 0x1AA6C8
-                  text_font: font_display
-                  long_mode: SCROLL_CIRCULAR
-                  text_align: CENTER
 
               - label:
                   id: weather_label
