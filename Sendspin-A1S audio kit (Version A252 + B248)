@@ -15,7 +15,7 @@ substitutions:
 
   LED: GPIO22
   AMP: GPIO21
-  JACK: GPIO39
+  JACK: GPIO39    # I'm not using the jack, but added this for future needs
 
 ## SETTINGS ######################################################################################################################################
 
