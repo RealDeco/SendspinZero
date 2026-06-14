@@ -1,0 +1,328 @@
+## SendspinZero-Speaker. Edit the settings below.
+substitutions:
+  name: sendspinzero-speaker
+  friendly_name: SendspinZero-Speaker
+
+  DAC_DOUT_PIN: GPIO26
+  DAC_POWER_PIN: GPIO21
+  DAC_LRCLK_PIN: GPIO25
+  DAC_BCLK_PIN: GPIO27
+  DAC_MCLK_PIN: GPIO0
+  DAC_DIN_PIN: GPIO35
+
+  I2C_SDA_PIN: GPIO33
+  I2C_SCL_PIN: GPIO32
+
+  LED: GPIO22
+  AMP: GPIO21
+  JACK: GPIO39
+
+## SETTINGS ######################################################################################################################################
+
+  # Startup sound, options are: Home_Connected or Home_Connected_Male
+  startup_sound_file: Home_Connected
+
+  media_sample_rate: 48000
+
+##################################################################################################################################################
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.5.0
+  name_add_mac_suffix: true
+  project:
+    name: realdeco.sendspin_zero
+    version: "2026.5.0"
+    priority: -100
+    then:
+      - select.set:
+          id: dac_select
+          option: "BOTH"  #L+R
+
+
+esp32:
+  board: esp-wrover-kit
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP_WIFI_RX_IRAM_OPT: "y" 
+      CONFIG_ESP_WIFI_IRAM_OPT: "y" 
+      CONFIG_ESP_WIFI_EXTRA_IRAM_OPT: "y"
+      # original options used
+      CONFIG_SPIRAM_RODATA: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+      CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST: "y"
+      CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY: "y"
+      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: "y"
+      CONFIG_MBEDTLS_SSL_PROTO_TLS1_3: "y"
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_LWIP_IRAM_OPTIMIZATION: "y"
+    advanced:
+      minimum_chip_revision: 3.1
+      sram1_as_iram: true
+
+logger:
+  level: warn
+
+api:
+  encryption:
+    key: !secret encryption_key
+
+api:
+  on_client_connected:
+    - delay: 1s
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, std::string("ready_sound"));
+          }
+        }
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  networks:
+  - ssid: !secret wifi_ssid
+    password: !secret wifi_password
+  power_save_mode: none
+  min_auth_mode: WPA2
+  ap:
+
+psram:
+  ignore_not_found: false 
+
+captive_portal:
+
+audio:
+  codecs:
+    mp3:
+    flac:
+    opus:
+      pseudostack:
+        threadsafe: true
+
+i2c:
+  sda: ${I2C_SDA_PIN}
+  scl: ${I2C_SCL_PIN}
+  frequency: 200kHz
+  #scan: true
+  id: bus_a
+
+i2s_audio:
+  - id: i2s_output
+    i2s_lrclk_pin: ${DAC_LRCLK_PIN}
+    i2s_bclk_pin: ${DAC_BCLK_PIN}
+    i2s_mclk_pin: ${DAC_MCLK_PIN}
+
+sendspin:
+  id: sendspin_hub
+  task_stack_in_psram: false
+
+i2s_audio:
+  - id: i2s_audio_bus
+    i2s_lrclk_pin: GPIO4
+    i2s_bclk_pin: GPIO3
+
+audio_dac:
+  - platform: es8388
+    id: es8388_dac
+    #i2c_id: bus_a
+    address: 0x10
+
+microphone:
+  - platform: i2s_audio
+    i2s_din_pin: ${DAC_DIN_PIN}
+    id: mic1
+    adc_type: external
+    pdm: false
+    sample_rate: 16000
+    bits_per_sample: 16bit
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    i2s_audio_id: i2s_output
+    i2s_dout_pin: ${DAC_DOUT_PIN}
+    dac_type: external
+    audio_dac: es8388_dac
+    channel: stereo
+    bits_per_sample: 16bit
+    sample_rate: ${media_sample_rate}
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: box_speaker
+    num_channels: 2
+    task_stack_in_psram: true
+    source_speakers:
+      - id: announcement_mixing_input
+      - id: media_mixing_input
+
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+audio_file:
+  - id: ready_sound
+    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
+
+media_source:
+  - platform: audio_file
+    id: audio_file_announcement_source
+  - platform: audio_http
+    id: http_announcement_source
+  - platform: audio_http
+    id: http_media_source
+  - platform: sendspin
+    id: sendspin_media_source
+
+media_player:
+  - platform: sendspin
+    id: sendspin_group_media_player
+    name: Sendspin Group Media Player
+
+  - platform: speaker_source
+    id: external_media_player
+    name: Media Player
+    on_idle:
+      then:
+        - switch.turn_on:
+            id: mute
+    on_announcement:
+      then:
+        - switch.turn_off:
+            id: mute
+        - delay: 50ms
+        - if:
+            condition:
+              lambda: 'return id(announcement_priority).current_option() == "high";'
+            then:
+              - mixer_speaker.apply_ducking:
+                  id: media_mixing_input
+                  decibel_reduction: !lambda "return id(duck_db_high);"
+                  duration: !lambda "return id(duck_high_out).state;"
+            else:
+              - mixer_speaker.apply_ducking:
+                  id: media_mixing_input
+                  decibel_reduction: !lambda "return id(duck_db_low);"
+                  duration: !lambda "return id(duck_low_out).state;"
+    on_play:
+      then:
+        - switch.turn_off:
+            id: mute
+        - delay: 50ms
+        - if:
+            condition:
+              lambda: return id(announcement_priority).current_option() == "high";
+            then:
+              - mixer_speaker.apply_ducking:
+                  id: media_mixing_input
+                  decibel_reduction: 0
+                  duration: !lambda "return id(duck_high_in).state;"
+            else:
+              - mixer_speaker.apply_ducking:
+                  id: media_mixing_input
+                  decibel_reduction: 0
+                  duration: !lambda "return id(duck_low_in).state;"
+    announcement_pipeline:
+      format: FLAC
+      num_channels: 1
+      sample_rate: ${media_sample_rate}
+      speaker: announcement_resampling_speaker
+      sources:
+        - audio_file_announcement_source
+        - http_announcement_source
+    media_pipeline:
+      format: FLAC
+      num_channels: 2
+      sample_rate: ${media_sample_rate}
+      speaker: media_resampling_speaker
+      sources:
+        - http_media_source
+        - sendspin_media_source
+    volume_increment: 0.05
+    volume_min: 0.4
+    volume_max: 1.0
+
+script:
+  - id: play_sound
+    parameters:
+      sound_file: string
+    then:
+      - lambda: |-
+          if ((id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING)) {
+            id(external_media_player)
+              ->make_call()
+              .set_media_url("audio-file://" + sound_file)
+              .set_announcement(true)
+              .perform();
+          }
+
+switch:
+  - platform: template
+    id: startup_sound_switch
+    name: Startup sound
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+globals:
+  - id: boot_sound_played
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: boot_announce_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: duck_db_low
+    initial_value: '0.7'
+    type: float
+  - id: duck_db_high
+    initial_value: '0.2'
+    type: float
+
+select:
+  - platform: es8388
+    es8388_id: es8388_dac
+    dac_output:
+      id: dac_select
+      name: "DAC Output"
+    adc_input_mic:
+      name: "ADC Input MIC"
+  - platform: template
+    name: "Announcement Priority"
+    id: announcement_priority
+    options:
+      - "low"
+      - "high"
+    restore_value: true
+    initial_option: "low"
+    optimistic: true
+
+switch:
+  - platform: gpio
+    id: mute
+    name: "Mute"
+    pin: ${AMP}
+    restore_mode: ALWAYS_ON
+    inverted: true
+
+light:
+  - platform: status_led
+    id: red_led
+    pin:
+      number: ${LED}
