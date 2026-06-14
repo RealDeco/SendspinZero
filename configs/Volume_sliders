@@ -1,0 +1,129 @@
+media_player:
+  - platform: sendspin
+    name: Sendspin Group Media Player
+
+  - platform: speaker_source
+    id: external_media_player
+    name: Media Player
+
+    on_announcement:
+      then:
+        - if:
+            condition:
+              lambda: 'return id(announcement_priority).current_option() == "high";'
+            then:
+              - mixer_speaker.apply_ducking:    
+                  id: media_mixing_input
+                  decibel_reduction: !lambda "return id(duck_db_high);"    #music attentuation for high priority announcement
+                  duration: !lambda "return id(duck_high_out).state;"      #fade out time
+            else:
+              - mixer_speaker.apply_ducking:  #ducking for low priority announcement
+                  id: media_mixing_input
+                  decibel_reduction: !lambda "return id(duck_db_low);"     #music attentuation for low priority announcement
+                  duration: !lambda "return id(duck_low_out).state;"       #fade out time
+
+    on_play:
+      then:
+        - if:
+            condition:
+              lambda: return id(announcement_priority).current_option() == "high";
+            then:
+              - mixer_speaker.apply_ducking:
+                  id: media_mixing_input
+                  decibel_reduction: 0
+                  duration: !lambda "return id(duck_high_in).state;"    #Fade in time after high announcement
+            else:
+              - mixer_speaker.apply_ducking:
+                  id: media_mixing_input
+                  decibel_reduction: 0
+                  duration: !lambda "return id(duck_low_in).state;"     #Fade in time after high announcement
+
+    announcement_pipeline:
+      format: FLAC
+      num_channels: 1
+      sample_rate: ${media_sample_rate}
+      speaker: announcement_resampling_speaker
+      sources:
+        - http_announcement_source
+        - audio_file_announcement_source
+
+    media_pipeline:
+      format: FLAC
+      num_channels: 2
+      sample_rate: ${media_sample_rate}
+      speaker: media_resampling_speaker
+      sources:
+        - http_media_source
+        - sendspin_media_source
+
+
+number:
+  - platform: template
+    name: "Music Volume During Low Priority"
+    id: duck_slider_low
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(duck_db_low) = (1.0f - x) * 30.0f;    #Invert logic so it works as a volume slider. Max 30db reduction.
+
+  - platform: template
+    name: "Music Volume During High Priority"
+    id: duck_slider_high
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(duck_db_high) = (1.0f - x) * 30.0f;    #Invert logic so it works as a volume slider. Max 30db reduction.
+
+  - platform: template
+    name: "Fade In Music After High Priority (ms)"    #High fade in ms
+    id: duck_high_in
+    min_value: 0
+    max_value: 2000
+    step: 100
+    initial_value: 100
+    optimistic: true
+
+  - platform: template
+    name: "High Priority Fade Out Music (ms)"        #High fade out ms
+    id: duck_high_out
+    min_value: 0
+    max_value: 2000
+    step: 100
+    initial_value: 1000
+    optimistic: true
+
+  - platform: template
+    name: "Fade In Music After Low Priority (ms)"    #Low fade in ms
+    id: duck_low_in
+    min_value: 0
+    max_value: 2000
+    step: 100
+    initial_value: 1000
+    optimistic: true
+  - platform: template
+
+    name: "Low Priority Fade Out Music (ms)"        #Low fade out ms
+    id: duck_low_out
+    min_value: 0
+    max_value: 2000
+    step: 100
+    initial_value: 1000
+    optimistic: true
+
+
+globals:
+  - id: duck_db_low                    #Initial volume for low priority announcements
+    initial_value: '0.7'
+    type: float
+
+  - id: duck_db_high                   #Initial volume for high priority announcements
+    initial_value: '0.2'
+    type: float
