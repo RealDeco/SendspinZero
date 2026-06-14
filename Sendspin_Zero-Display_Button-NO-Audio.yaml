@@ -1334,7 +1334,7 @@ lvgl:
                   text: " "
                   text_color: 0xFFFF00
                   text_font: font_display
-                  long_mode: DOT
+                  long_mode: SCROLL_CIRCULAR
                   text_align: CENTER
 
               - label:
@@ -1347,7 +1347,7 @@ lvgl:
                   text_color: 0xFFFFFF
                   text_font: font_display
                   long_mode: DOT
-                  text_align: CENTER
+                  text_align: SCROLL_CIRCULAR
 
               - label:
                   id: now_playing_artist_label
@@ -1359,7 +1359,7 @@ lvgl:
                   text_color: 0x8EDBFF
                   text_font: font_display
                   long_mode: DOT
-                  text_align: CENTER
+                  text_align: SCROLL_CIRCULAR
 
     - id: media_menu_page
       bg_color: 0x000000
