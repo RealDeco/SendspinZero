@@ -261,12 +261,6 @@ text_sensor:
     id: sendspin_artist
     type: artist
     on_value:
-      - lambda: |-
-          id(sendspin_album_art_valid) = false;
-      - lvgl.image.update:
-          id: album_art_widget
-          src: fallback_playing_image
-      - script.execute: album_art_timeout_fallback
       - lvgl.label.update:
           id: now_playing_artist_label
           text: !lambda |-
@@ -277,12 +271,6 @@ text_sensor:
     id: sendspin_album
     type: album
     on_value:
-      - lambda: |-
-          id(sendspin_album_art_valid) = false;
-      - lvgl.image.update:
-          id: album_art_widget
-          src: fallback_playing_image
-      - script.execute: album_art_timeout_fallback
       - lvgl.label.update:
           id: now_playing_album_label
           text: !lambda |-
