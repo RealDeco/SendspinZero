@@ -16,7 +16,8 @@ substitutions:
 ### For a no-DAC build, remove or comment this packages block and use the
 ### no-DAC substitutions above.
 
-#packages:
+packages:
+
 #  audio:
 #    url: https://github.com/RealDeco/SendspinZero.git
 #    ref: main
@@ -32,12 +33,12 @@ substitutions:
 
 ### END OF DAC SETTINGS
 
-external_components:
-
-  - source: github://pr#16057
-    components: [generic_image, sendspin]
-    refresh: 1h
-
+  extcomp:
+    url: https://github.com/RealDeco/xiaozhi-esphome.git
+    ref: main
+    refresh: 0s
+    files:
+      - devices/Under_Development/Modular/HW/sendspin-external_components.yaml
 
 esphome:
   name: ${name}
