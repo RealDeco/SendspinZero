@@ -31,11 +31,13 @@ substitutions:
 
 ## SENDSPIN SETTINGS #############################################################################################################################
 
-external_components:
-
-  - source: github://pr#16057
-    components: [generic_image, sendspin]
-    refresh: 1h
+packages:
+  extcomp:
+    url: https://github.com/RealDeco/xiaozhi-esphome.git
+    ref: main
+    refresh: 0s
+    files:
+      - devices/Under_Development/Modular/HW/sendspin-external_components.yaml
 
 ## END OF SETTINGS ###############################################################################################################################
 
