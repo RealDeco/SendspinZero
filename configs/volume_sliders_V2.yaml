@@ -1,0 +1,63 @@
+  # A much cleaner setup with volume/delay sliders for each mixer.
+  # Dual announcement controls aren't needed if HA can control the volumes dynamically.
+
+number:
+  - platform: template
+    name: "Music Volume"
+    id: music_duck
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(media_vol) = (1.0f - x) * 30.0f;
+  - platform: template
+    name: "Announcement Volume"
+    id: announce_duck
+    min_value: 0
+    max_value: 1
+    step: 0.01
+    optimistic: true
+    restore_value: true
+    set_action:
+      - lambda: |-
+          id(announce_vol) = (1.0f - x) * 30.0f;
+
+  - platform: template
+    name: "Media Fade (ms)"
+    id: media_fade
+    min_value: 0
+    max_value: 2000
+    step: 100
+    restore_value: yes
+    optimistic: true
+  - platform: template
+    name: "Announcement Fade (ms)"
+    id: announce_fade
+    min_value: 0
+    max_value: 2000
+    step: 100
+    restore_value: yes
+    optimistic: true
+
+globals:
+  - id: media_vol
+    restore_value: yes
+    type: float
+  - id: announce_vol
+    restore_value: yes
+    type: float
+
+interval:
+  - interval: 100ms
+    then:
+      - mixer_speaker.apply_ducking:
+          id: media_mixing_input
+          decibel_reduction: !lambda "return id(media_vol);"
+          duration: !lambda "return id(media_fade).state;"
+      - mixer_speaker.apply_ducking:
+          id: announcement_mixer_input
+          decibel_reduction: !lambda "return id(announce_vol);"
+          duration: !lambda "return id(announce_fade).state;"
