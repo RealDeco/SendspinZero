@@ -4,6 +4,12 @@ substitutions:
 
   ha_weather_entity: weather.forecast_home
 
+  ## Startup sound, options are: Home_Connected or Home_Connected_Male
+  startup_sound_file: Home_Connected # Home_Connected, popup, available, Server_Connected
+
+  # Image model options are: AlbertQuackmore, Alita, Casita, Gwen, HA-character, ha-girl, Hacker, Salem, Sarah, Shaun
+  imagemodel: "HA-character"
+
 ### No DAC / no local speaker:
 #  display_state_player: sendspin_group_media_player
 #  api_connected_script: api_connected_actions
@@ -117,7 +123,7 @@ globals:
     initial_value: "false"
 
 image:
-  - file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Gwen/240x240/playing.png
+  - file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/360x360/playing.png
     id: fallback_playing_image
     resize: 170x170
     type: RGB565
