@@ -179,7 +179,11 @@ All parts were sourced from AliExpress and added up to **just over $10** (last c
 
 Make sure to:
 
-* Solder the pads on the **back of the PCM5102A** (as shown below)
+* Solder the 4 control pads on the **back of the PCM5102A** (also shown below):
+  * H1L -> L
+  * H2L -> L
+  * H3L -> H
+  * H4L -> L
 * Solder the bridge near **SCK on the front** (some boards come pre-soldered)
 
 <img src="https://github.com/user-attachments/assets/17d6b71f-2928-4bff-ac34-9cff48638098" />
