@@ -8,11 +8,11 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.5.0
+  min_version: 2026.6.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.5.0"
+    version: "2026.6.0"
   on_boot:
     priority: -100
     then:
@@ -53,7 +53,6 @@ captive_portal:
 
 sendspin:
   id: sendspin_hub
-  task_stack_in_psram: false
 
 i2s_audio:
   - id: i2s_audio_bus
@@ -73,7 +72,6 @@ speaker:
     id: mixing_speaker
     output_speaker: box_speaker
     num_channels: 2
-    task_stack_in_psram: true
     source_speakers:
       - id: announcement_mixing_input
       - id: media_mixing_input
