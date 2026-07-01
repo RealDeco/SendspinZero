@@ -44,11 +44,11 @@ packages:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.5.0
+  min_version: 2026.6.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.5.0"
+    version: "2026.6.0"
   on_boot:
     priority: -100
     then:
@@ -202,7 +202,6 @@ generic_image:
 
 sendspin:
   id: sendspin_hub
-  task_stack_in_psram: false
 
 i2s_audio:
   - id: i2s_audio_bus
@@ -222,7 +221,6 @@ speaker:
     id: mixing_speaker
     output_speaker: box_speaker
     num_channels: 2
-    task_stack_in_psram: true
     source_speakers:
       - id: announcement_mixing_input
       - id: media_mixing_input
@@ -392,12 +390,6 @@ text_sensor:
     id: sendspin_title
     type: title
     on_value:
-      - lambda: |-
-          id(sendspin_album_art_valid) = false;
-      - lvgl.image.update:
-          id: album_art_widget
-          src: fallback_playing_image
-      - script.execute: album_art_timeout_fallback
       - lvgl.label.update:
           id: now_playing_title_label
           text: !lambda |-
@@ -418,6 +410,12 @@ text_sensor:
     id: sendspin_album
     type: album
     on_value:
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: album_art_widget
+          src: fallback_playing_image
+      - script.execute: album_art_timeout_fallback
       - lvgl.label.update:
           id: now_playing_album_label
           text: !lambda |-
