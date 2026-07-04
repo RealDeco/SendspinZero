@@ -175,7 +175,7 @@ All parts were sourced from AliExpress and added up to **just over $10** (last c
 * **GND**
 * **3.3V**
 
-### Important DAC Setup
+# >>>> Important DAC Setup <<<<
 
 Make sure to:
 
