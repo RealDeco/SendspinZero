@@ -7,9 +7,6 @@ substitutions:
   ## Startup sound, options are: Home_Connected or Home_Connected_Male
   startup_sound_file: popup # Home_Connected, popup, available, Server_Connected
 
-  # Image model options are: AlbertQuackmore, Alita, Casita, Gwen, HA-character, ha-girl, Hacker, Salem, Sarah, Shaun
-  imagemodel: "HA-character"
-
   ## Sample rate for DAC
   media_sample_rate: 44100
 
@@ -44,11 +41,11 @@ packages:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.7.0
+  min_version: 2026.6.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.7.0"
+    version: "2026.6.0"
   on_boot:
     priority: -100
     then:
@@ -137,6 +134,11 @@ globals:
     restore_value: yes
     initial_value: "1"
 
+  - id: volume_control_target_group
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+
   - id: control_menu_cursor
     type: int
     restore_value: no
@@ -162,6 +164,11 @@ globals:
     restore_value: no
     initial_value: "false"
 
+  - id: group_play_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
   - id: media_button_click_count
     type: int
     restore_value: no
@@ -174,7 +181,7 @@ globals:
 
 image:
   - platform: file
-    file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/360x360/playing.png
+    file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Gwen/240x240/playing.png
     id: fallback_playing_image
     resize: 216x216
     type: RGB565
@@ -822,6 +829,7 @@ script:
                 int max_items = (int) lroundf(id(media_item_count).state);
                 if (max_items < 1) max_items = 1;
                 if (max_items > 10) max_items = 10;
+                max_items += 1; // +1 for the Group Play row
                 if (id(media_menu_cursor) < 1 || id(media_menu_cursor) > max_items) {
                   id(media_menu_cursor) = 1;
                 }
@@ -846,10 +854,10 @@ script:
                       if (id(control_menu_turn_halfstep)) {
                         if (id(menu_scroll_direction_switch).state) {
                           id(control_menu_cursor) += 1;
-                          if (id(control_menu_cursor) > 6) id(control_menu_cursor) = 1;
+                          if (id(control_menu_cursor) > 8) id(control_menu_cursor) = 1;
                         } else {
                           id(control_menu_cursor) -= 1;
-                          if (id(control_menu_cursor) < 1) id(control_menu_cursor) = 6;
+                          if (id(control_menu_cursor) < 1) id(control_menu_cursor) = 8;
                         }
                       }
                       id(control_menu_turn_halfstep) = !id(control_menu_turn_halfstep);
@@ -868,20 +876,19 @@ script:
                         - script.execute: popup_autoclose
                       else:
                         - lambda: |-
+                            auto *volume_target = id(volume_control_target_group) ? static_cast<media_player::MediaPlayer *>(id(sendspin_group_media_player)) : static_cast<media_player::MediaPlayer *>(id(external_media_player));
                             const bool popup_visible =
                               (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) ||
                               (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));
                             if (popup_visible) {
                               // Keep using the local step counter while the volume popup is active.
                             } else {
-                              id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                              id(volume_control_pct) = (int) lroundf(volume_target->volume * 100.0f / 0.90f);
                             }
                             id(volume_control_pct) += 5;
                             if (id(volume_control_pct) > 100) id(volume_control_pct) = 100;
                             id(popup_mode_light) = false;
-                        - media_player.volume_set:
-                            id: external_media_player
-                            volume: !lambda 'return id(volume_control_pct) * 0.009f;'
+                            volume_target->make_call().set_volume(id(volume_control_pct) * 0.009f).perform();
                         - script.execute: show_volume_popup
                         - script.execute: popup_autoclose
 
@@ -896,6 +903,7 @@ script:
                 int max_items = (int) lroundf(id(media_item_count).state);
                 if (max_items < 1) max_items = 1;
                 if (max_items > 10) max_items = 10;
+                max_items += 1; // +1 for the Group Play row
                 if (id(media_menu_cursor) < 1 || id(media_menu_cursor) > max_items) {
                   id(media_menu_cursor) = 1;
                 }
@@ -920,10 +928,10 @@ script:
                       if (id(control_menu_turn_halfstep)) {
                         if (id(menu_scroll_direction_switch).state) {
                           id(control_menu_cursor) -= 1;
-                          if (id(control_menu_cursor) < 1) id(control_menu_cursor) = 6;
+                          if (id(control_menu_cursor) < 1) id(control_menu_cursor) = 8;
                         } else {
                           id(control_menu_cursor) += 1;
-                          if (id(control_menu_cursor) > 6) id(control_menu_cursor) = 1;
+                          if (id(control_menu_cursor) > 8) id(control_menu_cursor) = 1;
                         }
                       }
                       id(control_menu_turn_halfstep) = !id(control_menu_turn_halfstep);
@@ -942,20 +950,19 @@ script:
                         - script.execute: popup_autoclose
                       else:
                         - lambda: |-
+                            auto *volume_target = id(volume_control_target_group) ? static_cast<media_player::MediaPlayer *>(id(sendspin_group_media_player)) : static_cast<media_player::MediaPlayer *>(id(external_media_player));
                             const bool popup_visible =
                               (!lv_obj_has_flag(id(popup_idle), LV_OBJ_FLAG_HIDDEN)) ||
                               (!lv_obj_has_flag(id(popup_sendspin), LV_OBJ_FLAG_HIDDEN));
                             if (popup_visible) {
                               // Keep using the local step counter while the volume popup is active.
                             } else {
-                              id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+                              id(volume_control_pct) = (int) lroundf(volume_target->volume * 100.0f / 0.90f);
                             }
                             id(volume_control_pct) -= 5;
                             if (id(volume_control_pct) < 0) id(volume_control_pct) = 0;
                             id(popup_mode_light) = false;
-                        - media_player.volume_set:
-                            id: external_media_player
-                            volume: !lambda 'return id(volume_control_pct) * 0.009f;'
+                            volume_target->make_call().set_volume(id(volume_control_pct) * 0.009f).perform();
                         - script.execute: show_volume_popup
                         - script.execute: popup_autoclose
 
@@ -1118,7 +1125,8 @@ script:
       - lambda: |-
           id(knob_popup_active) = false;
           id(popup_mode_light) = false;
-          id(volume_control_pct) = (int) lroundf(id(external_media_player).volume * 100.0f / 0.90f);
+          auto *volume_target = id(volume_control_target_group) ? static_cast<media_player::MediaPlayer *>(id(sendspin_group_media_player)) : static_cast<media_player::MediaPlayer *>(id(external_media_player));
+          id(volume_control_pct) = (int) lroundf(volume_target->volume * 100.0f / 0.90f);
       - script.execute: render_popup
 
   - id: show_selected_control_popup
@@ -1182,18 +1190,19 @@ script:
           };
 
           for (int i = 0; i < 6; i++) {
-            const bool selected = ((i + 1) == id(control_menu_cursor));
+            const bool cursor_here = ((i + 1) == id(control_menu_cursor));
+            const bool is_active = ((i + 1) == id(selected_control_index));
             char item_text[64];
-            snprintf(item_text, sizeof(item_text), "  %s", labels[i]);
+            snprintf(item_text, sizeof(item_text), "  %s%s", labels[i], is_active ? " *" : "");
             lv_label_set_text(idle_items[i], item_text);
             lv_label_set_text(sendspin_items[i], item_text);
-            
-            if (selected) {
+
+            if (cursor_here) {
               lv_obj_set_style_bg_color(idle_items[i], lv_color_hex(0x66CCFF), LV_PART_MAIN);
               lv_obj_set_style_bg_opa(idle_items[i], LV_OPA_COVER, LV_PART_MAIN);
               lv_obj_set_style_text_color(idle_items[i], lv_color_hex(0x000000), LV_PART_MAIN);
               lv_obj_set_style_radius(idle_items[i], 6, LV_PART_MAIN);
-              
+
               lv_obj_set_style_bg_color(sendspin_items[i], lv_color_hex(0x66CCFF), LV_PART_MAIN);
               lv_obj_set_style_bg_opa(sendspin_items[i], LV_OPA_COVER, LV_PART_MAIN);
               lv_obj_set_style_text_color(sendspin_items[i], lv_color_hex(0x000000), LV_PART_MAIN);
@@ -1201,9 +1210,46 @@ script:
             } else {
               lv_obj_set_style_bg_opa(idle_items[i], LV_OPA_TRANSP, LV_PART_MAIN);
               lv_obj_set_style_text_color(idle_items[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-              
+
               lv_obj_set_style_bg_opa(sendspin_items[i], LV_OPA_TRANSP, LV_PART_MAIN);
               lv_obj_set_style_text_color(sendspin_items[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+            }
+          }
+
+          struct VolumeRow {
+            lv_obj_t *idle;
+            lv_obj_t *sendspin;
+            const char *label;
+            bool is_active;
+            int cursor_value;
+          };
+          VolumeRow volume_rows[2] = {
+            { id(control_menu_idle_volume_internal), id(control_menu_sendspin_volume_internal), "Internal Volume", !id(volume_control_target_group), 7 },
+            { id(control_menu_idle_volume_group), id(control_menu_sendspin_volume_group), "Group Volume", id(volume_control_target_group), 8 },
+          };
+          for (int i = 0; i < 2; i++) {
+            const bool cursor_here = (volume_rows[i].cursor_value == id(control_menu_cursor));
+            char item_text[64];
+            snprintf(item_text, sizeof(item_text), "  %s%s", volume_rows[i].label, volume_rows[i].is_active ? " *" : "");
+            lv_label_set_text(volume_rows[i].idle, item_text);
+            lv_label_set_text(volume_rows[i].sendspin, item_text);
+
+            if (cursor_here) {
+              lv_obj_set_style_bg_color(volume_rows[i].idle, lv_color_hex(0x66CCFF), LV_PART_MAIN);
+              lv_obj_set_style_bg_opa(volume_rows[i].idle, LV_OPA_COVER, LV_PART_MAIN);
+              lv_obj_set_style_text_color(volume_rows[i].idle, lv_color_hex(0x000000), LV_PART_MAIN);
+              lv_obj_set_style_radius(volume_rows[i].idle, 6, LV_PART_MAIN);
+
+              lv_obj_set_style_bg_color(volume_rows[i].sendspin, lv_color_hex(0x66CCFF), LV_PART_MAIN);
+              lv_obj_set_style_bg_opa(volume_rows[i].sendspin, LV_OPA_COVER, LV_PART_MAIN);
+              lv_obj_set_style_text_color(volume_rows[i].sendspin, lv_color_hex(0x000000), LV_PART_MAIN);
+              lv_obj_set_style_radius(volume_rows[i].sendspin, 6, LV_PART_MAIN);
+            } else {
+              lv_obj_set_style_bg_opa(volume_rows[i].idle, LV_OPA_TRANSP, LV_PART_MAIN);
+              lv_obj_set_style_text_color(volume_rows[i].idle, lv_color_hex(0x33CC66), LV_PART_MAIN);
+
+              lv_obj_set_style_bg_opa(volume_rows[i].sendspin, LV_OPA_TRANSP, LV_PART_MAIN);
+              lv_obj_set_style_text_color(volume_rows[i].sendspin, lv_color_hex(0x33CC66), LV_PART_MAIN);
             }
           }
       - if:
@@ -1245,9 +1291,15 @@ script:
     mode: restart
     then:
       - lambda: |-
-          id(selected_control_index) = id(control_menu_cursor);
-      - script.execute: hide_control_menu
-      - script.execute: show_selected_control_popup
+          const int cursor = id(control_menu_cursor);
+          if (cursor >= 1 && cursor <= 6) {
+            id(selected_control_index) = cursor;
+          } else if (cursor == 7) {
+            id(volume_control_target_group) = false;
+          } else if (cursor == 8) {
+            id(volume_control_target_group) = true;
+          }
+      - script.execute: render_control_menu
 
   - id: render_media_menu
     mode: restart
@@ -1256,9 +1308,35 @@ script:
           int count = (int) lroundf(id(media_item_count).state);
           if (count < 1) count = 1;
           if (count > 10) count = 10;
-          if (id(media_menu_cursor) < 1 || id(media_menu_cursor) > count) {
+          int total_items = count + 1; // +1 for the Group Play row
+          if (id(media_menu_cursor) < 1 || id(media_menu_cursor) > total_items) {
             id(media_menu_cursor) = 1;
           }
+
+          lv_obj_t *group_idle = id(media_menu_idle_group_play);
+          lv_obj_t *group_sendspin = id(media_menu_sendspin_group_play);
+          const bool group_selected = (id(media_menu_cursor) == 1);
+          const char *group_text = id(group_play_active) ? "  Exit Group" : "  Group Play";
+          lv_label_set_text(group_idle, group_text);
+          lv_label_set_text(group_sendspin, group_text);
+          if (group_selected) {
+            lv_obj_set_style_bg_color(group_idle, lv_color_hex(0xFF9900), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(group_idle, LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_text_color(group_idle, lv_color_hex(0x000000), LV_PART_MAIN);
+            lv_obj_set_style_radius(group_idle, 6, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(group_sendspin, lv_color_hex(0xFF9900), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(group_sendspin, LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_text_color(group_sendspin, lv_color_hex(0x000000), LV_PART_MAIN);
+            lv_obj_set_style_radius(group_sendspin, 6, LV_PART_MAIN);
+            lv_obj_scroll_to_view(group_idle, LV_ANIM_ON);
+            lv_obj_scroll_to_view(group_sendspin, LV_ANIM_ON);
+          } else {
+            lv_obj_set_style_bg_opa(group_idle, LV_OPA_TRANSP, LV_PART_MAIN);
+            lv_obj_set_style_text_color(group_idle, lv_color_hex(0xFF9900), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(group_sendspin, LV_OPA_TRANSP, LV_PART_MAIN);
+            lv_obj_set_style_text_color(group_sendspin, lv_color_hex(0xFF9900), LV_PART_MAIN);
+          }
+
           const char *labels[10] = {
             id(media_name_1).state.c_str(), id(media_name_2).state.c_str(), id(media_name_3).state.c_str(),
             id(media_name_4).state.c_str(), id(media_name_5).state.c_str(), id(media_name_6).state.c_str(),
@@ -1282,7 +1360,7 @@ script:
             if (i < count) {
               lv_obj_clear_flag(idle_items[i], LV_OBJ_FLAG_HIDDEN);
               lv_obj_clear_flag(sendspin_items[i], LV_OBJ_FLAG_HIDDEN);
-              const bool selected = ((i + 1) == id(media_menu_cursor));
+              const bool selected = ((i + 2) == id(media_menu_cursor)); // +1 for 0-index, +1 for the Group Play row
               char item_text[64];
               snprintf(item_text, sizeof(item_text), "  %s", labels[i]);
               lv_label_set_text(idle_items[i], item_text);
@@ -1457,42 +1535,50 @@ script:
     then:
       - if:
           condition:
-            lambda: |-
-              const char *urls[10] = {
-                id(media_url_1).state.c_str(), id(media_url_2).state.c_str(), id(media_url_3).state.c_str(),
-                id(media_url_4).state.c_str(), id(media_url_5).state.c_str(), id(media_url_6).state.c_str(),
-                id(media_url_7).state.c_str(), id(media_url_8).state.c_str(), id(media_url_9).state.c_str(),
-                id(media_url_10).state.c_str()
-              };
-              int cursor = id(media_menu_cursor);
-              if (cursor < 1 || cursor > 10) return false;
-              std::string url = urls[cursor - 1];
-              std::string player = id(ha_media_player_entity).state;
-              return !player.empty() && !url.empty() && url != "unused";
+            lambda: 'return id(media_menu_cursor) == 1;'
           then:
-            - homeassistant.action:
-                action: media_player.play_media
-                data_template:
-                  entity_id: "{{ target_entity }}"
-                  media_content_type: music
-                  media_content_id: "{{ media_url }}"
-                variables:
-                  target_entity: |-
-                    return id(ha_media_player_entity).state;
-                  media_url: |-
+            - sendspin.switch:
+            - lambda: |-
+                id(group_play_active) = !id(group_play_active);
+          else:
+            - if:
+                condition:
+                  lambda: |-
                     const char *urls[10] = {
                       id(media_url_1).state.c_str(), id(media_url_2).state.c_str(), id(media_url_3).state.c_str(),
                       id(media_url_4).state.c_str(), id(media_url_5).state.c_str(), id(media_url_6).state.c_str(),
                       id(media_url_7).state.c_str(), id(media_url_8).state.c_str(), id(media_url_9).state.c_str(),
                       id(media_url_10).state.c_str()
                     };
-                    int cursor = id(media_menu_cursor);
-                    if (cursor < 1 || cursor > 10) return std::string("");
-                    return std::string(urls[cursor - 1]);
-          else:
-            - logger.log:
-                level: WARN
-                format: "Selected media item or media player has no Home Assistant entity configured"
+                    int index = id(media_menu_cursor) - 1; // -1 for the Group Play row
+                    if (index < 1 || index > 10) return false;
+                    std::string url = urls[index - 1];
+                    std::string player = id(ha_media_player_entity).state;
+                    return !player.empty() && !url.empty() && url != "unused";
+                then:
+                  - homeassistant.action:
+                      action: media_player.play_media
+                      data_template:
+                        entity_id: "{{ target_entity }}"
+                        media_content_type: music
+                        media_content_id: "{{ media_url }}"
+                      variables:
+                        target_entity: |-
+                          return id(ha_media_player_entity).state;
+                        media_url: |-
+                          const char *urls[10] = {
+                            id(media_url_1).state.c_str(), id(media_url_2).state.c_str(), id(media_url_3).state.c_str(),
+                            id(media_url_4).state.c_str(), id(media_url_5).state.c_str(), id(media_url_6).state.c_str(),
+                            id(media_url_7).state.c_str(), id(media_url_8).state.c_str(), id(media_url_9).state.c_str(),
+                            id(media_url_10).state.c_str()
+                          };
+                          int index = id(media_menu_cursor) - 1; // -1 for the Group Play row
+                          if (index < 1 || index > 10) return std::string("");
+                          return std::string(urls[index - 1]);
+                else:
+                  - logger.log:
+                      level: WARN
+                      format: "Selected media item or media player has no Home Assistant entity configured"
       - script.execute: hide_media_menu
 
   - id: apply_knob_to_light
@@ -2368,13 +2454,14 @@ lvgl:
             hidden: true
             align: CENTER
             width: 220
-            height: 250
+            height: 280
             radius: 18
             pad_top: 12
             pad_bottom: 12
             pad_left: 12
             pad_right: 12
-            scrollable: false
+            scrollable: true
+            scrollbar_mode: ACTIVE
             bg_color: 0x202020
             bg_opa: COVER
             border_color: 0x66CCFF
@@ -2394,7 +2481,7 @@ lvgl:
                   y: 38
                   width: 196
                   text: "  Control 1"
-                  text_color: 0x66CCFF
+                  text_color: 0xFFFFFF
 
               - label:
                   id: control_menu_idle_item_2
@@ -2436,6 +2523,33 @@ lvgl:
                   text: "  Control 6"
                   text_color: 0xFFFFFF
 
+              - obj:
+                  align: TOP_LEFT
+                  y: 202
+                  width: 196
+                  height: 2
+                  bg_color: 0x555555
+                  bg_opa: COVER
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+
+              - label:
+                  id: control_menu_idle_volume_internal
+                  align: TOP_LEFT
+                  y: 212
+                  width: 196
+                  text: "  Internal Volume"
+                  text_color: 0x33CC66
+
+              - label:
+                  id: control_menu_idle_volume_group
+                  align: TOP_LEFT
+                  y: 240
+                  width: 196
+                  text: "  Group Volume"
+                  text_color: 0x33CC66
+
         - obj:
             id: media_menu_idle
             hidden: true
@@ -2463,17 +2577,36 @@ lvgl:
                   text_align: CENTER
 
               - label:
-                  id: media_menu_idle_item_1
+                  id: media_menu_idle_group_play
                   align: TOP_LEFT
                   y: 38
                   width: 196
+                  text: "  Group Play"
+                  text_color: 0xFF9900
+
+              - obj:
+                  align: TOP_LEFT
+                  y: 62
+                  width: 196
+                  height: 2
+                  bg_color: 0x555555
+                  bg_opa: COVER
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+
+              - label:
+                  id: media_menu_idle_item_1
+                  align: TOP_LEFT
+                  y: 72
+                  width: 196
                   text: "  Media 1"
-                  text_color: 0xFFFF00
+                  text_color: 0xFFFFFF
 
               - label:
                   id: media_menu_idle_item_2
                   align: TOP_LEFT
-                  y: 66
+                  y: 100
                   width: 196
                   text: "  Media 2"
                   text_color: 0xFFFFFF
@@ -2481,7 +2614,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_3
                   align: TOP_LEFT
-                  y: 94
+                  y: 128
                   width: 196
                   text: "  Media 3"
                   text_color: 0xFFFFFF
@@ -2489,7 +2622,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_4
                   align: TOP_LEFT
-                  y: 122
+                  y: 156
                   width: 196
                   text: "  Media 4"
                   text_color: 0xFFFFFF
@@ -2497,7 +2630,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_5
                   align: TOP_LEFT
-                  y: 150
+                  y: 184
                   width: 196
                   text: "  Media 5"
                   text_color: 0xFFFFFF
@@ -2505,7 +2638,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_6
                   align: TOP_LEFT
-                  y: 178
+                  y: 212
                   width: 196
                   text: "  Media 6"
                   text_color: 0xFFFFFF
@@ -2513,7 +2646,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_7
                   align: TOP_LEFT
-                  y: 206
+                  y: 240
                   width: 196
                   text: "  Media 7"
                   text_color: 0xFFFFFF
@@ -2521,7 +2654,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_8
                   align: TOP_LEFT
-                  y: 234
+                  y: 268
                   width: 196
                   text: "  Media 8"
                   text_color: 0xFFFFFF
@@ -2529,7 +2662,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_9
                   align: TOP_LEFT
-                  y: 262
+                  y: 296
                   width: 196
                   text: "  Media 9"
                   text_color: 0xFFFFFF
@@ -2537,7 +2670,7 @@ lvgl:
               - label:
                   id: media_menu_idle_item_10
                   align: TOP_LEFT
-                  y: 290
+                  y: 324
                   width: 196
                   text: "  Media 10"
                   text_color: 0xFFFFFF
@@ -2637,13 +2770,14 @@ lvgl:
             hidden: true
             align: CENTER
             width: 220
-            height: 250
+            height: 280
             radius: 18
             pad_top: 12
             pad_bottom: 12
             pad_left: 12
             pad_right: 12
-            scrollable: false
+            scrollable: true
+            scrollbar_mode: ACTIVE
             bg_color: 0x202020
             bg_opa: COVER
             border_color: 0x66CCFF
@@ -2663,7 +2797,7 @@ lvgl:
                   y: 38
                   width: 196
                   text: "  Control 1"
-                  text_color: 0x66CCFF
+                  text_color: 0xFFFFFF
 
               - label:
                   id: control_menu_sendspin_item_2
@@ -2705,6 +2839,33 @@ lvgl:
                   text: "  Control 6"
                   text_color: 0xFFFFFF
 
+              - obj:
+                  align: TOP_LEFT
+                  y: 202
+                  width: 196
+                  height: 2
+                  bg_color: 0x555555
+                  bg_opa: COVER
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+
+              - label:
+                  id: control_menu_sendspin_volume_internal
+                  align: TOP_LEFT
+                  y: 212
+                  width: 196
+                  text: "  Internal Volume"
+                  text_color: 0x33CC66
+
+              - label:
+                  id: control_menu_sendspin_volume_group
+                  align: TOP_LEFT
+                  y: 240
+                  width: 196
+                  text: "  Group Volume"
+                  text_color: 0x33CC66
+
         - obj:
             id: media_menu_sendspin
             hidden: true
@@ -2732,17 +2893,36 @@ lvgl:
                   text_align: CENTER
 
               - label:
-                  id: media_menu_sendspin_item_1
+                  id: media_menu_sendspin_group_play
                   align: TOP_LEFT
                   y: 38
                   width: 196
+                  text: "  Group Play"
+                  text_color: 0xFF9900
+
+              - obj:
+                  align: TOP_LEFT
+                  y: 62
+                  width: 196
+                  height: 2
+                  bg_color: 0x555555
+                  bg_opa: COVER
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+
+              - label:
+                  id: media_menu_sendspin_item_1
+                  align: TOP_LEFT
+                  y: 72
+                  width: 196
                   text: "  Media 1"
-                  text_color: 0xFFFF00
+                  text_color: 0xFFFFFF
 
               - label:
                   id: media_menu_sendspin_item_2
                   align: TOP_LEFT
-                  y: 66
+                  y: 100
                   width: 196
                   text: "  Media 2"
                   text_color: 0xFFFFFF
@@ -2750,7 +2930,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_3
                   align: TOP_LEFT
-                  y: 94
+                  y: 128
                   width: 196
                   text: "  Media 3"
                   text_color: 0xFFFFFF
@@ -2758,7 +2938,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_4
                   align: TOP_LEFT
-                  y: 122
+                  y: 156
                   width: 196
                   text: "  Media 4"
                   text_color: 0xFFFFFF
@@ -2766,7 +2946,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_5
                   align: TOP_LEFT
-                  y: 150
+                  y: 184
                   width: 196
                   text: "  Media 5"
                   text_color: 0xFFFFFF
@@ -2774,7 +2954,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_6
                   align: TOP_LEFT
-                  y: 178
+                  y: 212
                   width: 196
                   text: "  Media 6"
                   text_color: 0xFFFFFF
@@ -2782,7 +2962,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_7
                   align: TOP_LEFT
-                  y: 206
+                  y: 240
                   width: 196
                   text: "  Media 7"
                   text_color: 0xFFFFFF
@@ -2790,7 +2970,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_8
                   align: TOP_LEFT
-                  y: 234
+                  y: 268
                   width: 196
                   text: "  Media 8"
                   text_color: 0xFFFFFF
@@ -2798,7 +2978,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_9
                   align: TOP_LEFT
-                  y: 262
+                  y: 296
                   width: 196
                   text: "  Media 9"
                   text_color: 0xFFFFFF
@@ -2806,7 +2986,7 @@ lvgl:
               - label:
                   id: media_menu_sendspin_item_10
                   align: TOP_LEFT
-                  y: 290
+                  y: 324
                   width: 196
                   text: "  Media 10"
                   text_color: 0xFFFFFF
