@@ -49,11 +49,11 @@ packages:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.7.4
+  min_version: 2026.8.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.7.4"
+    version: "2026.8.0"
   on_boot:
     priority: -100
     then:
