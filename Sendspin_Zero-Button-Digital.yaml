@@ -8,11 +8,11 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.6.0
+  min_version: 2026.8.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.6.0"
+    version: "2026.8.0"
   on_boot:
     priority: -100
     then:
@@ -269,7 +269,7 @@ light:
     default_transition_length: 0s
     chipset: WS2812
     num_leds: 1
-    rgb_order: grb
+    channel_colors: grb
     effects:
       - pulse:
           name: "Slow Pulse"
