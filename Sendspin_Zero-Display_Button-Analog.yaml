@@ -10,40 +10,15 @@ substitutions:
   # Image model options are: AlbertQuackmore, Alita, Casita, Gwen, HA-character, ha-girl, Hacker, Salem, Sarah, Shaun
   imagemodel: "HA-character"
 
-### No DAC / no local speaker:
-#  display_state_player: sendspin_group_media_player
-#  api_connected_script: api_connected_actions
-
-### DAC / local speaker enabled:
-  display_state_player: external_media_player
-  api_connected_script: api_connected_actions_audio
-
-### DAC SETTINGS
-### For a no-DAC build, remove or comment this packages block and use the
-### no-DAC substitutions above.
+  media_sample_rate: 48000
 
 packages:
-  audio:
-    url: https://github.com/RealDeco/SendspinZero.git
-    ref: main
-    refresh: 0s
-    files:
-      - configs/analog_audio_config.yaml
-  hw:
-    url: https://github.com/RealDeco/SendspinZero.git
-    ref: main
-    refresh: 0s
-    files:
-      - configs/analog_speaker_config.yaml
-
-### END OF DAC SETTINGS
-
   extcomp:
     url: https://github.com/RealDeco/xiaozhi-esphome.git
     ref: main
     refresh: 0s
     files:
-      - devices/Under_Development/Modular/HW/sendspin-external_components_2026.7.3.yaml
+      - devices/Under_Development/Modular/HW/sendspin-external_components_2026.8.0.yaml
 
 
 esphome:
@@ -72,7 +47,16 @@ logger:
 
 api:
   on_client_connected:
-    - script.execute: ${api_connected_script}
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, std::string("ready_sound"));
+          }
+        }
+    - delay: 5s
+    - script.execute: update_weather_display
+    - script.execute: fetch_daily_forecast
 
 ota:
   - platform: esphome
@@ -125,6 +109,10 @@ globals:
     type: bool
     restore_value: no
     initial_value: "false"
+  - id: boot_sound_played
+    type: bool
+    restore_value: no
+    initial_value: "false"
 
 image:
   - platform: file
@@ -145,7 +133,6 @@ image:
     transition_image:
       id: album_art_transition
     on_image_display:
-      - script.stop: album_art_timeout_fallback
       - lambda: |-
           id(sendspin_album_art_valid) = true;
       - if:
@@ -167,6 +154,12 @@ image:
       - logger.log:
           format: "Album art cleared"
           level: WARN
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: incoming_art
+          src: fallback_playing_image
+      - lvgl.animation.start: album_art_crossfade
     on_image_error:
       - logger.log:
           format: "Album art error"
@@ -177,6 +170,53 @@ image:
 sendspin:
   id: sendspin_hub
 
+i2s_audio:
+  - id: i2s_audio_bus
+    i2s_lrclk_pin: GPIO4
+    i2s_bclk_pin: GPIO5
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    i2s_audio_id: i2s_audio_bus
+    i2s_dout_pin: GPIO6
+    dac_type: external
+    channel: stereo
+
+  - platform: mixer
+    id: mixing_speaker
+    output_speaker: box_speaker
+    num_channels: 2
+    source_speakers:
+      - id: announcement_mixing_input
+      - id: media_mixing_input
+
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: ${media_sample_rate}
+    bits_per_sample: 16
+
+audio_file:
+  - id: ready_sound
+    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
+
+media_source:
+  - platform: audio_file
+    id: audio_file_announcement_source
+  - platform: audio_http
+    id: http_announcement_source
+  - platform: audio_http
+    id: http_media_source
+  - platform: sendspin
+    id: sendspin_media_source
+
 media_player:
   - platform: sendspin
     id: sendspin_group_media_player
@@ -184,7 +224,6 @@ media_player:
 
     on_play:
       then:
-        - script.stop: mp_idle_debounce
         - lvgl.page.show: sendspin_page
         - script.execute: update_status_leds
 
@@ -194,7 +233,61 @@ media_player:
 
     on_idle:
       then:
-        - script.execute: mp_idle_debounce
+        - lvgl.page.show: idle_page
+        - script.execute: led_red
+        - script.execute: update_status_leds
+
+    on_pause:
+      then:
+        - script.execute: update_status_leds
+
+    on_state:
+      then:
+        - script.execute: update_status_leds
+
+  - platform: speaker_source
+    id: external_media_player
+    name: Media Player
+
+    announcement_pipeline:
+      format: FLAC
+      num_channels: 1
+      sample_rate: ${media_sample_rate}
+      speaker: announcement_resampling_speaker
+      sources:
+        - audio_file_announcement_source
+        - http_announcement_source
+
+    media_pipeline:
+      format: FLAC
+      num_channels: 2
+      sample_rate: ${media_sample_rate}
+      speaker: media_resampling_speaker
+      sources:
+        - http_media_source
+        - sendspin_media_source
+
+    volume_increment: 0.05
+    volume_min: 0.4
+    volume_max: 0.85
+
+    on_play:
+      then:
+        - lvgl.page.show: sendspin_page
+        - script.execute: update_status_leds
+
+    on_announcement:
+      then:
+        - script.execute: update_status_leds
+
+    on_idle:
+      then:
+        - if:
+            condition:
+              media_player.is_idle: sendspin_group_media_player
+            then:
+              - lvgl.page.show: idle_page
+              - script.execute: led_red
         - script.execute: update_status_leds
 
     on_pause:
@@ -301,7 +394,6 @@ text_sensor:
           id(last_album_art_valid) = id(sendspin_album_art_valid);
       - lambda: |-
           id(sendspin_album_art_valid) = false;
-      - script.execute: album_art_timeout_fallback
       - lvgl.label.update:
           id: now_playing_album_label
           text: !lambda |-
@@ -451,11 +543,34 @@ font:
       - "\U000F0599"
 
 script:
-  - id: api_connected_actions
+  - id: play_sound
+    parameters:
+      priority: bool
+      sound_file: string
     then:
-      - delay: 5s
-      - script.execute: update_weather_display
-      - script.execute: fetch_daily_forecast
+      - if:
+          condition:
+            lambda: 'return sound_file == "ready_sound";'
+          then:
+            - delay: 2s
+            - lvgl.page.show: boot_sound_page
+
+      - if:
+          condition:
+            lambda: return priority;
+          then:
+            - media_player.stop:
+                id: external_media_player
+                announcement: true
+
+      - lambda: |-
+          if ((id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING) || priority) {
+            id(external_media_player)
+              ->make_call()
+              .set_media_url("audio-file://" + sound_file)
+              .set_announcement(true)
+              .perform();
+          }
 
   - id: fetch_daily_forecast
     mode: restart
@@ -656,30 +771,6 @@ script:
           }
           lv_obj_set_style_text_color(id(weather_feels_like), c, LV_PART_MAIN);
 
-  - id: album_art_timeout_fallback
-    mode: restart
-    then:
-      - delay: 2000ms
-      - if:
-          condition:
-            lambda: 'return !id(sendspin_album_art_valid);'
-          then:
-            - lvgl.image.update:
-                id: incoming_art
-                src: fallback_playing_image
-            - lvgl.animation.start: album_art_crossfade
-
-  - id: mp_idle_debounce
-    mode: restart
-    then:
-      - delay: 1200ms
-      - if:
-          condition:
-            media_player.is_idle: ${display_state_player}
-          then:
-            - lvgl.page.show: idle_page
-            - script.execute: led_red
-
   - id: update_media_menu_display
     then:
       - lambda: |-
@@ -742,7 +833,7 @@ script:
           id(media_menu_active) = false;
       - if:
           condition:
-            media_player.is_idle: ${display_state_player}
+            media_player.is_idle: sendspin_group_media_player
           then:
             - lvgl.page.show: idle_page
           else:
@@ -834,7 +925,7 @@ script:
     then:
       - lambda: |-
           using media_player::MediaPlayerState;
-          auto state = id(${display_state_player}).state;
+          auto state = id(external_media_player).state;
           if (
             state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
             state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
@@ -1002,6 +1093,15 @@ text:
     initial_value: "https://live-bauerdk.sharp-stream.com/Vinyl_dk.mp3"
     max_length: 255
     mode: text
+
+switch:
+  - platform: template
+    id: startup_sound_switch
+    name: Startup sound
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
 
 button:
   - platform: restart
