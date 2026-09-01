@@ -40,10 +40,10 @@ packages:
     ref: main
     refresh: 0s
     files:
-      - devices/Under_Development/Modular/HW/sendspin-external_components_2026.7.3.yaml
+      - devices/Under_Development/Modular/HW/sendspin-external_components_2026.8.0.yaml
 
 #packages: # local
-#  extcomp: !include localtest/HW/sendspin-external_components_2026.7.3.yaml
+#  extcomp: !include localtest/HW/sendspin-external_components_2026.8.0.yaml
 
 ## END OF SETTINGS ###############################################################################################################################
 
@@ -144,7 +144,6 @@ image:
     transition_image:
       id: album_art_transition
     on_image_display:
-      - script.stop: album_art_timeout_fallback
       - lambda: |-
           id(sendspin_album_art_valid) = true;
       - if:
@@ -166,6 +165,12 @@ image:
       - logger.log:
           format: "Album art cleared"
           level: WARN
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: incoming_art
+          src: fallback_playing_image
+      - lvgl.animation.start: album_art_crossfade
     on_image_error:
       - logger.log:
           format: "Album art error"
@@ -228,6 +233,10 @@ media_player:
     id: sendspin_group_media_player
     name: Sendspin Group Media Player
 
+    on_idle:
+      then:
+        - lvgl.page.show: idle_page
+
   - platform: speaker_source
     id: external_media_player
     name: Media Player
@@ -255,21 +264,24 @@ media_player:
 
     on_play:
       then:
-        - script.stop: mp_idle_debounce
         - lvgl.page.show: sendspin_page
-
-    on_announcement:
-      then: 
-        - script.stop: mp_idle_debounce
 
     on_idle:
       then:
-        - script.execute: mp_idle_debounce
+        - if:
+            condition:
+              media_player.is_idle: sendspin_group_media_player
+            then:
+              - lvgl.page.show: idle_page
 
     on_pause:
       then:
-        - script.execute: mp_idle_debounce
-        
+        - if:
+            condition:
+              media_player.is_idle: sendspin_group_media_player
+            then:
+              - lvgl.page.show: idle_page
+
 sensor:
   - platform: homeassistant
     id: ha_weather_temperature
@@ -339,7 +351,6 @@ text_sensor:
           id(last_album_art_valid) = id(sendspin_album_art_valid);
       - lambda: |-
           id(sendspin_album_art_valid) = false;
-      - script.execute: album_art_timeout_fallback
       - component.update: now_playing_text
 
   - platform: template
@@ -534,30 +545,6 @@ font:
       - "\U000F0599"
 
 script:
-  - id: album_art_timeout_fallback
-    mode: restart
-    then:
-      - delay: 2000ms
-      - if:
-          condition:
-            lambda: 'return !id(sendspin_album_art_valid);'
-          then:
-            - lvgl.image.update:
-                id: incoming_art
-                src: fallback_playing_image
-            - lvgl.animation.start: album_art_crossfade
-
-  - id: mp_idle_debounce
-    mode: restart
-    then:
-      - delay: 1200ms
-      - if:
-          condition:
-            and:
-              - media_player.is_idle: external_media_player
-          then:
-            - lvgl.page.show: idle_page
-
   - id: play_sound
     parameters:
       priority: bool
