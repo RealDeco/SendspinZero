@@ -241,6 +241,14 @@ media_player:
     on_pause:
       then:
         - script.execute: update_status_leds
+        - if:
+            condition:
+              and:
+                - lambda: 'return !id(media_menu_active);'
+                - not:
+                    media_player.is_playing: sendspin_group_media_player
+            then:
+              - lvgl.page.show: idle_page
 
     on_state:
       then:
@@ -294,6 +302,14 @@ media_player:
     on_pause:
       then:
         - script.execute: update_status_leds
+        - if:
+            condition:
+              and:
+                - lambda: 'return !id(media_menu_active);'
+                - not:
+                    media_player.is_playing: sendspin_group_media_player
+            then:
+              - lvgl.page.show: idle_page
 
     on_state:
       then:
