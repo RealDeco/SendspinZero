@@ -418,7 +418,7 @@ text_sensor:
     lambda: |-
       if (!id(ha_weather_temperature).has_state()) return std::string("--");
       std::string tunit = id(ha_weather_temperature_unit).state.c_str();
-      if (tunit.empty()) tunit = "∞C";
+      if (tunit.empty()) tunit = "°C";
       lv_label_set_text(id(weather_big_temp_unit), tunit.c_str());
       int ti = (int) lroundf(id(ha_weather_temperature).state);
       char buf[8];
@@ -441,7 +441,7 @@ text_sensor:
         return std::string("Weather unavailable");
       }
       std::string tunit = id(ha_weather_temperature_unit).state.c_str();
-      if (tunit.empty()) tunit = "∞C";
+      if (tunit.empty()) tunit = "°C";
       std::string wunit = id(ha_weather_wind_speed_unit).state.c_str();
       if (wunit.empty()) wunit = "m/s";
       float temp_c = id(ha_weather_temperature).state;
@@ -728,7 +728,7 @@ lvgl:
                         align: CENTER
                         x: 76
                         y: -14
-                        text: "∞C"
+                        text: "°C"
                         text_color: 0xFFFF00
                         text_font: font_temp_unit
 
