@@ -133,6 +133,20 @@ media_player:
     on_state:
       then:
         - script.execute: update_status_leds
+        - lambda: |-
+            using media_player::MediaPlayerState;
+            auto state = id(external_media_player).state;
+            auto is_announcing = state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING;
+
+            if (id(announcement_ducking_enabled).state) {
+              if (is_announcing) {
+                id(media_mixing_input).apply_ducking(id(ducking_decibels).state, 0);
+                id(is_ducking) = true;
+              } else if (id(is_ducking)){
+                id(media_mixing_input).apply_ducking(0, 1000);
+                id(is_ducking) = false;
+              }
+            }
 
 script:
   - id: play_sound
@@ -195,6 +209,27 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+  - platform: template
+    id: announcement_ducking_enabled
+    name: Announcement ducking
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+number:
+  - platform: template
+    name: "Ducking decibels"
+    id: ducking_decibels
+    entity_category: config
+    optimistic: true
+    unit_of_measurement: dB
+    device_class: sound_pressure
+    min_value: 0
+    max_value: 50
+    step: 1
+    initial_value: 15
+    restore_value: true
 
 button:
   - platform: restart
@@ -248,6 +283,10 @@ globals:
     type: bool
     restore_value: no
     initial_value: "false"
+  - id: is_ducking
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 output:
   - platform: ledc
