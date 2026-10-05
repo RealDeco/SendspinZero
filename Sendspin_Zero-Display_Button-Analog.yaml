@@ -1096,6 +1096,17 @@ text:
 
 switch:
   - platform: template
+    id: sendspin_delay_adjustable
+    name: "Sendspin adjustable delay"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - sendspin.media_source.enable_static_delay_adjustment:
+    turn_off_action:
+      - sendspin.media_source.disable_static_delay_adjustment:
+
+  - platform: template
     id: startup_sound_switch
     name: Startup sound
     icon: "mdi:card-text-outline"
