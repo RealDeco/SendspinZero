@@ -524,7 +524,7 @@ font:
       weight: 700
     id: font_temp_unit
     size: 22
-    glyphs: "°CF"
+    glyphs: "\u00B0CF"
 
   - file: https://raw.githubusercontent.com/rbtdev/spiroplot/master/fonts/DSEG7/Classic-MINI/DSEG7ClassicMini-Bold.ttf
     id: font_7seg
