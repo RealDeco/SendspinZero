@@ -459,6 +459,20 @@ Important to remove two capasitors from the PCM1808 or the sound would not be cl
 | GND		| - (GND)	|
 | Left		| LIN		|
 
+---
+
+If using for WLED audio reactive: (note: no hole in 3D case for LED cable)
+
+ <img width="503" height="570" alt="Screenshot 2026-10-10 at 10 35 44" src="https://github.com/user-attachments/assets/b9169cc5-e3da-43b7-ab20-b8622b2445eb" />
+
+
+| ESP32S3 Zero  | LED strip	|
+| ------------- | --------------|
+| GND     | GND		|
+| GPIO 8  | DATA	|
+| 5V		  | VCC		|
+
+
 ## Parts List
 
 * **1 × ESP32-S3 Zero**
