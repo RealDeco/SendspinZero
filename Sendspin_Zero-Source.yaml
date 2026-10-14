@@ -1,0 +1,158 @@
+### SendspinZero Source
+substitutions:
+  name: esphome-web-ce5604
+  friendly_name: SendspinZero-Source
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/ApolloAutomation/CAST_PRO-1
+      ref: 743af5bd27ed4281eebe9bdfbab7150aaa43e199
+      path: Integrations/ESPHome/components
+    components: [sendspin_source]
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.10.0
+  name_add_mac_suffix: true
+  project:
+    name: realdeco.sendspin_zero
+    version: "2026.10.0"
+  on_boot:
+    priority: -100
+    then:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: OFF
+
+esp32:
+  variant: esp32s3
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+  level: WARN
+    
+psram:
+  mode: quad
+  speed: 80MHz
+
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+
+wifi:
+  output_power: 8.5dB
+  power_save_mode: none
+  # Workaround: roam scans drop active audio
+  post_connect_roaming: false
+  ap:
+
+improv_serial:
+
+captive_portal:
+
+i2s_audio:
+  - id: i2s_in
+    i2s_bclk_pin: GPIO3
+    i2s_lrclk_pin: GPIO5
+    i2s_mclk_pin: GPIO6
+
+microphone:
+  - platform: i2s_audio
+    id: line_in_adc
+    i2s_audio_id: i2s_in
+    i2s_din_pin: GPIO4
+    adc_type: external
+    pdm: false
+    channel: stereo
+    bits_per_sample: 32bit
+    sample_rate: 48000
+    mclk_multiple: 256
+
+sendspin:
+  id: sendspin_hub
+  task_stack_in_psram: false
+  unpaired_access: false
+  on_open_pairing_window:
+    - logger.log: "Sendspin pairing window open"
+  on_pairing_succeeded:
+    - logger.log: "Sendspin pairing succeeded"
+  on_pairing_failed:
+    - logger.log:
+        format: "Sendspin pairing failed: %s"
+        args: ["reason.c_str()"]
+
+sendspin_source:
+  id: line_in_source
+  sendspin_id: sendspin_hub
+  microphone:
+    microphone: line_in_adc
+    channels: [0, 1]
+    # PCM1808 is a 24-bit ADC; 16 halves the bandwidth
+    bits_per_sample: 24
+    gain_factor: 1
+  codec: pcm
+  chunk_duration: 20ms
+  capture_buffer: 500ms
+  line_sense:
+    # Off until the thresholds are checked on hardware
+    enabled: true
+    threshold: -60dB
+    hysteresis: 6dB
+    attack: 100ms
+    release: 2s
+  on_streaming_started:
+    - binary_sensor.template.publish:
+        id: line_in_streaming
+        state: ON
+  on_streaming_stopped:
+    - binary_sensor.template.publish:
+        id: line_in_streaming
+        state: OFF
+  on_signal_present:
+    - binary_sensor.template.publish:
+        id: line_in_signal
+        state: ON
+  on_signal_absent:
+    - binary_sensor.template.publish:
+        id: line_in_signal
+        state: OFF
+
+binary_sensor:
+  - platform: template
+    id: line_in_streaming
+    name: "Line In Streaming"
+    icon: mdi:audio-input-rca
+    entity_category: diagnostic
+
+  - platform: template
+    id: line_in_signal
+    name: "Line In Signal"
+    icon: mdi:waveform
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: sendspin
+    id: sendspin_pairing_code
+    type: pairing_code
+    name: "Sendspin Pairing Code"
+
+button:
+  - platform: restart
+    id: restart_button
+    name: "Restart"
+    entity_category: config
+    icon: "mdi:restart"
+
+  - platform: template
+    id: sendspin_confirm_pairing
+    name: "Sendspin Confirm Pairing"
+    icon: mdi:link-variant
+    entity_category: config
+    on_press:
+      - sendspin.confirm_pairing_window: sendspin_hub
