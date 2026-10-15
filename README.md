@@ -132,7 +132,7 @@ All parts were sourced from AliExpress and added up to **just over $10** (last c
   [https://www.aliexpress.com/item/1005008130629022.html](https://www.aliexpress.com/item/1005008130629022.html)
 
 * **1 × 1.54" LCD screen**
-  [https://www.aliexpress.com/item/1005008703777053.html](https://www.aliexpress.com/item/1005008703777053.html)
+  [https://www.aliexpress.com/item/1005013054606844.html](https://www.aliexpress.com/item/1005013054606844.html)
 
 ---
 
