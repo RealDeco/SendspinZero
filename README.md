@@ -425,6 +425,7 @@ When the Sendspin Source role is supported in ESPHome, it will allow external au
 <img width="1672" height="941" alt="c4d55f96-e3dd-48a5-9ce6-a04c773e3c6e" src="https://github.com/user-attachments/assets/c810e856-2f45-44bd-a786-5c5b1d181fea" />
 
 
+<img width="300" src="https://github.com/user-attachments/assets/f2508c3d-5130-4169-82b9-920bf7dacce7" />
 
 <img width="300" src="https://github.com/user-attachments/assets/d0d03243-bbb5-40b1-9507-065afbf4530a" />
 
