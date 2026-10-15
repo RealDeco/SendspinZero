@@ -422,7 +422,9 @@ This device differs from the others by being an input device instead of an outpu
 
 When the Sendspin Source role is supported in ESPHome, it will allow external audio devices such as turntables, radios, cassette decks, CD players, and other devices with audio output to be connected to Music Assistant and played in sync across your Sendspin devices.
 
-<img width="300" src="https://github.com/user-attachments/assets/2f3a3647-0e5f-46c0-98bf-bb9e9f90b85c" />
+<img width="1672" height="941" alt="c4d55f96-e3dd-48a5-9ce6-a04c773e3c6e" src="https://github.com/user-attachments/assets/c810e856-2f45-44bd-a786-5c5b1d181fea" />
+
+
 
 <img width="300" src="https://github.com/user-attachments/assets/d0d03243-bbb5-40b1-9507-065afbf4530a" />
 
@@ -431,8 +433,6 @@ When the Sendspin Source role is supported in ESPHome, it will allow external au
 Important to remove two capasitors from the PCM1808 or the sound would not be clear:
 
 [Open video](https://github.com/user-attachments/assets/831a7ad7-ee62-4282-af22-7b3cd60827db)
-
-
 
 
 
