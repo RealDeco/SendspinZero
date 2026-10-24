@@ -8,11 +8,11 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.8.0
+  min_version: 2026.10.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.8.0"
+    version: "2026.10.0"
   on_boot:
     priority: -100
     then:
@@ -52,6 +52,11 @@ captive_portal:
 
 sendspin:
   id: sendspin_hub
+  on_pairing_failed:
+    - logger.log:
+        format: "Sendspin pairing failed: %s"
+        args: ["reason.c_str()"]
+        level: WARN
 
 i2s_audio:
   - id: i2s_audio_bus
@@ -207,12 +212,26 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
 
+  - platform: sendspin
+    id: sendspin_unpaired_access
+    type: unpaired_access
+    name: "Sendspin Unpaired Access"
+    restore_mode: RESTORE_DEFAULT_ON
+
 button:
   - platform: restart
     id: restart_button
     name: "Restart"
     entity_category: config
     icon: "mdi:restart"
+
+  - platform: template
+    id: sendspin_confirm_pairing
+    name: "Sendspin Confirm Pairing"
+    icon: mdi:link-variant
+    entity_category: config
+    on_press:
+      - sendspin.confirm_pairing_window: sendspin_hub
 
 text_sensor:
   - platform: sendspin
@@ -234,6 +253,11 @@ text_sensor:
     id: button_action
     name: Button Action
     update_interval: never
+
+  - platform: sendspin
+    id: sendspin_pairing_code
+    type: pairing_code
+    name: "Sendspin Pairing Code"
 
 select:
   - platform: template
