@@ -96,6 +96,15 @@ That gives a total of **9 variants**:
   </tr>
 </table>
 
+<br>
+
+<table>
+  <tr>
+    <td><strong>SendspinZero Source</strong></td>
+    <td><a href="https://realdeco.github.io/SendspinZero/Sendspin_Zero-Source/"><img src="https://img.shields.io/badge/FLASH-FIRMWARE-ff6b00?style=for-the-badge&labelColor=111827" alt="Open Installer"></a></td>
+  </tr>
+</table>
+
 </div>
 
 ---
