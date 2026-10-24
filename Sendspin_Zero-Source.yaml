@@ -34,7 +34,7 @@ esp32:
 
 logger:
   level: WARN
-    
+
 psram:
   mode: quad
   speed: 80MHz
@@ -78,14 +78,11 @@ sendspin:
   id: sendspin_hub
   task_stack_in_psram: false
   unpaired_access: false
-  on_open_pairing_window:
-    - logger.log: "Sendspin pairing window open"
-  on_pairing_succeeded:
-    - logger.log: "Sendspin pairing succeeded"
   on_pairing_failed:
     - logger.log:
         format: "Sendspin pairing failed: %s"
         args: ["reason.c_str()"]
+        level: WARN
 
 sendspin_source:
   id: line_in_source
@@ -100,7 +97,7 @@ sendspin_source:
   chunk_duration: 20ms
   capture_buffer: 500ms
   line_sense:
-    # Off until the thresholds are checked on hardware
+    # Tune threshold to your source level
     enabled: true
     threshold: -60dB
     hysteresis: 6dB
