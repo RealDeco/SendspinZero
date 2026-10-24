@@ -670,8 +670,7 @@ font:
       weight: 300
     id: font_date
     size: 22
-    glyphsets:
-      - GF_Latin_Core
+    glyphs: " -0123456789?ADFJMNOSabceghilmnoprstuvy"
 
   - file:
       type: gfonts
@@ -679,8 +678,7 @@ font:
       weight: 600
     id: font_boot
     size: 34
-    glyphsets:
-      - GF_Latin_Core
+    glyphs: " CHcdemnot"
 
   - file:
       type: gfonts
@@ -704,8 +702,7 @@ font:
       weight: 600
     id: font_forecast
     size: 14
-    glyphsets:
-      - GF_Latin_Core
+    glyphs: " -/0123456789CFMSTWadehinortu\u00B0"
 
   - file: https://raw.githubusercontent.com/rbtdev/spiroplot/master/fonts/DSEG7/Classic-MINI/DSEG7ClassicMini-Bold.ttf
     id: font_7seg
