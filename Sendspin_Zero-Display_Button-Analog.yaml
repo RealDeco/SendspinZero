@@ -24,11 +24,11 @@ packages:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.9.0
+  min_version: 2026.10.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.9.0"
+    version: "2026.10.0"
   on_boot:
     priority: -100
     then:
@@ -41,6 +41,9 @@ esp32:
   flash_size: 4MB
   framework:
     type: esp-idf
+    advanced:
+      assertion_level: SILENT
+      enable_lwip_assert: false
 
 logger:
   level: WARN
@@ -77,6 +80,14 @@ time:
     id: homeassistant_time
 
 globals:
+  - id: pairing_overlay
+    type: lv_obj_t*
+    restore_value: no
+    initial_value: "nullptr"
+  - id: pairing_code_label
+    type: lv_obj_t*
+    restore_value: no
+    initial_value: "nullptr"
   - id: sendspin_album_art_valid
     type: bool
     restore_value: no
@@ -169,6 +180,20 @@ image:
 
 sendspin:
   id: sendspin_hub
+  on_display_pairing_code:
+    - script.execute:
+        id: show_pairing_code
+        code: !lambda 'return code;'
+  on_clear_pairing_code:
+    - script.execute: hide_pairing_code
+  on_pairing_succeeded:
+    - script.execute: hide_pairing_code
+  on_pairing_failed:
+    - logger.log:
+        format: "Sendspin pairing failed: %s"
+        args: ["reason.c_str()"]
+        level: WARN
+    - script.execute: hide_pairing_code
 
 i2s_audio:
   - id: i2s_audio_bus
@@ -445,6 +470,11 @@ text_sensor:
                 id: date_label
                 text: !lambda return x;
 
+  - platform: sendspin
+    id: sendspin_pairing_code
+    type: pairing_code
+    name: "Sendspin Pairing Code"
+
 font:
   - file:
       type: gfonts
@@ -543,6 +573,68 @@ font:
       - "\U000F0599"
 
 script:
+  - id: show_pairing_code
+    mode: restart
+    parameters:
+      code: string
+    then:
+      - script.stop: hide_pairing_code
+      - lambda: |-
+          if (id(pairing_overlay) == nullptr) {
+            id(pairing_overlay) = lv_obj_create(lv_layer_top());
+            lv_obj_remove_style_all(id(pairing_overlay));
+            lv_obj_set_size(id(pairing_overlay), 200, 90);
+            lv_obj_center(id(pairing_overlay));
+            lv_obj_set_style_bg_color(id(pairing_overlay), lv_color_hex(0x000000), 0);
+            lv_obj_set_style_bg_opa(id(pairing_overlay), 235, 0);
+            lv_obj_set_style_border_width(id(pairing_overlay), 3, 0);
+            lv_obj_set_style_border_color(id(pairing_overlay), lv_color_hex(0x66CCFF), 0);
+            lv_obj_set_style_radius(id(pairing_overlay), 16, 0);
+            lv_obj_clear_flag(id(pairing_overlay), LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_clear_flag(id(pairing_overlay), LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t *title = lv_label_create(id(pairing_overlay));
+            lv_label_set_text(title, "Sendspin pairing");
+            lv_obj_set_style_text_font(title, id(font_display), 0);
+            lv_obj_set_style_text_color(title, lv_color_hex(0xB0B0B0), 0);
+            lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+            id(pairing_code_label) = lv_label_create(id(pairing_overlay));
+            lv_obj_set_style_text_font(id(pairing_code_label), id(font_7seg), 0);
+            lv_obj_set_style_text_color(id(pairing_code_label), lv_color_hex(0xFFFF00), 0);
+            lv_obj_align(id(pairing_code_label), LV_ALIGN_BOTTOM_MID, 0, -10);
+          }
+
+          std::string shown = code;
+          if (shown.size() == 6) shown.insert(3, " ");
+          lv_label_set_text(id(pairing_code_label), shown.c_str());
+          lv_obj_align(id(pairing_code_label), LV_ALIGN_BOTTOM_MID, 0, -10);
+          lv_anim_del(id(pairing_overlay), nullptr);
+          lv_obj_set_style_opa(id(pairing_overlay), LV_OPA_COVER, 0);
+          lv_obj_clear_flag(id(pairing_overlay), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_move_foreground(id(pairing_overlay));
+
+  - id: hide_pairing_code
+    mode: restart
+    then:
+      - lambda: |-
+          if (id(pairing_overlay) == nullptr || lv_obj_has_flag(id(pairing_overlay), LV_OBJ_FLAG_HIDDEN)) return;
+          lv_anim_del(id(pairing_overlay), nullptr);
+          lv_anim_t fade;
+          lv_anim_init(&fade);
+          lv_anim_set_var(&fade, id(pairing_overlay));
+          lv_anim_set_values(&fade, LV_OPA_COVER, LV_OPA_TRANSP);
+          lv_anim_set_time(&fade, 260);
+          lv_anim_set_exec_cb(&fade, [](void *obj, int32_t opacity) {
+            lv_obj_set_style_opa((lv_obj_t *) obj, opacity, 0);
+          });
+          lv_anim_start(&fade);
+      - delay: 280ms
+      - lambda: |-
+          if (id(pairing_overlay) != nullptr) {
+            lv_obj_add_flag(id(pairing_overlay), LV_OBJ_FLAG_HIDDEN);
+          }
+
   - id: play_sound
     parameters:
       priority: bool
@@ -1114,12 +1206,26 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
 
+  - platform: sendspin
+    id: sendspin_unpaired_access
+    type: unpaired_access
+    name: "Sendspin Unpaired Access"
+    restore_mode: RESTORE_DEFAULT_ON
+
 button:
   - platform: restart
     id: restart_button
     name: "Restart"
     entity_category: config
     icon: "mdi:restart"
+
+  - platform: template
+    id: sendspin_confirm_pairing
+    name: "Sendspin Confirm Pairing"
+    icon: mdi:link-variant
+    entity_category: config
+    on_press:
+      - sendspin.confirm_pairing_window: sendspin_hub
 
 output:
   - platform: ledc
