@@ -105,6 +105,7 @@ media_source:
     id: http_media_source
   - platform: sendspin
     id: sendspin_media_source
+    buffer_size: 500000
 
 media_player:
   - platform: sendspin
