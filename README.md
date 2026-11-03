@@ -365,7 +365,9 @@ same components as the other versions (esp32-s3 + PCM5102A DAC + Button) +
 
 NO 3D files made for this device.
 
-This is the only device with amplifier onboard, it's mono so for stereo speakers you need a module for each speaker and have them playing as stereo in MA.
+This is the only device with amplifier onboard, it's mono so for stereo speakers you need a module for each speaker and have them playing as stereo in MA. 
+
+Another alternative to achieve stereo sound is to stack two of the MAX98357 modules – e.g., one on top and one on the bottom of the ESP32. The module usually is set to Mono mix through a 1M resistor between Vin and SD. Replace this resistor on one module with a 100k resistor to get the Left channel, and with a 330k or 470k resistor on the other module to get the Right channel. [See here for more documentation of these modules and the target voltages for Channel selection.](https://learn.adafruit.com/adafruit-max98357-i2s-class-d-mono-amp/pinouts#sd-slash-mode-2693328)
 
 ### Pin Mapping
 (remove two pins from the spacer and solder the boards together)
