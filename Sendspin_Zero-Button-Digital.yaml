@@ -106,6 +106,7 @@ media_source:
   - platform: sendspin
     id: sendspin_media_source
     buffer_size: 500000
+    static_delay_adjustable: true
 
 media_player:
   - platform: sendspin
@@ -137,9 +138,25 @@ media_player:
     volume_min: 0.4
     volume_max: 0.9
 
+    on_announcement:
+      - mixer_speaker.apply_ducking:
+          id: media_mixing_input
+          decibel_reduction: 20
+          duration: 0.0s
+
     on_state:
       then:
         - script.execute: update_status_leds
+        - if:
+            condition:
+              not:
+                media_player.is_announcing:
+                  id: external_media_player
+            then:
+              - mixer_speaker.apply_ducking:
+                  id: media_mixing_input
+                  decibel_reduction: 0
+                  duration: 1.0s
 
 script:
   - id: play_sound
@@ -195,17 +212,6 @@ script:
       - light.turn_on: green_status_light
 
 switch:
-  - platform: template
-    id: sendspin_delay_adjustable
-    name: "Sendspin adjustable delay"
-    entity_category: config
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - sendspin.media_source.enable_static_delay_adjustment:
-    turn_off_action:
-      - sendspin.media_source.disable_static_delay_adjustment:
-
   - platform: template
     id: startup_sound_switch
     name: Startup sound
