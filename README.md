@@ -439,7 +439,7 @@ This is the only device based on esp32-s2 Supermini due to it's battery connecti
 
 This device differs from the others by being an input device instead of an output device.
 
-When the Sendspin Source role is supported in ESPHome, it will allow external audio devices such as turntables, radios, cassette decks, CD players, and other devices with audio output to be connected to Music Assistant and played in sync across your Sendspin devices.
+With Sendspin Source role support now available in ESPHome (through Apollo’s external component until native support lands in 2026.11), you can connect turntables, radios, cassette decks, CD players, and other devices with audio output to Music Assistant and play them in sync across your Sendspin devices.
 
 <img width="1672" height="941" alt="c4d55f96-e3dd-48a5-9ce6-a04c773e3c6e" src="https://github.com/user-attachments/assets/c810e856-2f45-44bd-a786-5c5b1d181fea" />
 
