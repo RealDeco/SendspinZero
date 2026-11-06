@@ -32,19 +32,6 @@ substitutions:
   # display_offset_width: "0"
   # display_offset_height: "80"
 
-## SENDSPIN SETTINGS #############################################################################################################################
-
-packages:
-  extcomp:
-    url: https://github.com/RealDeco/xiaozhi-esphome.git
-    ref: main
-    refresh: 0s
-    files:
-      - devices/Under_Development/Modular/HW/sendspin-external_components_2026.8.0.yaml
-
-#packages: # local
-#  extcomp: !include localtest/HW/sendspin-external_components_2026.8.0.yaml
-
 ## END OF SETTINGS ###############################################################################################################################
 
 esphome:
@@ -261,6 +248,7 @@ media_source:
   - platform: sendspin
     id: sendspin_media_source
     buffer_size: 500000
+    static_delay_adjustable: true
 
 media_player:
   - platform: sendspin
@@ -295,6 +283,24 @@ media_player:
     volume_increment: 0.05
     volume_min: 0.4
     volume_max: 0.85
+
+    on_announcement:
+      - mixer_speaker.apply_ducking:
+          id: media_mixing_input
+          decibel_reduction: 20
+          duration: 0.0s
+
+    on_state:
+      - if:
+          condition:
+            not:
+              media_player.is_announcing:
+                id: external_media_player
+          then:
+            - mixer_speaker.apply_ducking:
+                id: media_mixing_input
+                decibel_reduction: 0
+                duration: 1.0s
 
     on_play:
       then:
@@ -678,17 +684,6 @@ script:
           }
 
 switch:
-  - platform: template
-    id: sendspin_delay_adjustable
-    name: "Sendspin adjustable delay"
-    entity_category: config
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - sendspin.media_source.enable_static_delay_adjustment:
-    turn_off_action:
-      - sendspin.media_source.disable_static_delay_adjustment:
-
   - platform: template
     id: startup_sound_switch
     name: Startup sound
