@@ -511,6 +511,45 @@ If using for WLED audio reactive: (note: no hole in 3D case for LED cable)
 
 ---
 
+## SendspinZero-Ear
+
+Now that you have a SendspinZero player, all it needs to become a voice assistant is an ear.
+
+<img width="600" src="https://github.com/user-attachments/assets/506cbe4d-081a-4adc-b5ea-39529329b7b2" />
+
+SendspinZero-Ear is a speakerless voice assistant that uses your existing SendspinZero player as its speaker. It supports a stop word that can end a conversation or silence a ringing timer. You configure which player to use by setting its name on the SendspinZero-Ear device in Home Assistant.
+
+If your player has a display, it continues to show its usual content while the voice assistant is active. You can display the voice assistant phases on a Home Assistant dashboard.
+
+Keeping the microphone separate from the speaker makes it easier for the assistant to hear the wake word while music is playing. It also lets you use the speaker you already have.
+
+
+3D files will be there shortly.
+
+<img width="600" src="https://github.com/user-attachments/assets/9de93b72-2099-4762-8d2a-cc1f4ca1ac81" />
+
+## Pin Mapping
+
+### ESP32-S3 → INMP441
+
+| ESP32S3 Zero  | INMP441 pin  	|
+| ------------- | --------------|
+| GND		| GND+L/R	|
+| 3.3V		| VDD  	|
+| GPIO 4	| WS		|
+| GPIO 5	| SCK		|
+| GPIO 6	| SD		|
+
+
+## Parts List
+
+* **1 × ESP32-S3 Zero**
+  [https://www.aliexpress.com/item/1005009890203011.html](https://www.aliexpress.com/item/1005009890203011.html)
+* 1 × INMP441 microphone*
+  [https://www.aliexpress.com/item/1005012097806013.html](https://www.aliexpress.com/item/1005012097806013.html)
+
+---
+
 EOL
 
 ---
