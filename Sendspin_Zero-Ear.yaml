@@ -1,0 +1,927 @@
+substitutions:
+  name: sendspinzero-ear
+  friendly_name: Sendspin Zero Ear
+
+  voice_assist_idle_phase_id: "1"
+  voice_assist_waiting_for_command_phase_id: "2"
+  voice_assist_listening_phase_id: "3"
+  voice_assist_thinking_phase_id: "4"
+  voice_assist_replying_phase_id: "5"
+  voice_assist_not_ready_phase_id: "10"
+  voice_assist_error_phase_id: "11"
+  voice_assist_muted_phase_id: "12"
+  voice_assist_playing_phase_id: "13"
+  voice_assist_timer_finished_phase_id: "20"
+
+  # Starting value of the "Reply speaker" entity, the HA speaker that plays replies and the timer alarm
+  external_media_player: media_player.xiaozhi_taichi_pi_v1_media_player
+  timer_finished_sound_url: media-source://media_source/local/sounds_timer_finished.flac
+  # Short silent announcement that replaces a running reply when "stop" is heard
+  silence_url: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/sounds/silence.wav
+
+packages:
+  # Streams the mic to Music Assistant as a Sendspin source; remove this and the sendspin: hub to turn it off
+  micsource:
+    url: https://github.com/RealDeco/sendspin-guition.git
+    ref: main
+    refresh: 0s
+    files:
+      - Other/micsource.yaml
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2025.10.0
+  name_add_mac_suffix: true
+  project:
+    name: realdeco.sendspin_zero
+    version: "2026.10.0"
+  on_boot:
+    - priority: 600
+      then:
+        - if:
+            condition:
+              lambda: return id(init_in_progress);
+            then:
+              - lambda: id(init_in_progress) = false;
+        - script.execute:
+            id: set_phase
+            phase: ${voice_assist_not_ready_phase_id}
+        # Follow the reply speaker's state. HA only reads this list when it connects, so changing the
+        # speaker restarts the device (see reply_speaker)
+        - lambda: |-
+            const std::string speaker = id(reply_speaker).state;
+            id(tracked_speaker) = speaker;
+            id(speaker_tracking_started) = true;
+            if (speaker.find('.') == std::string::npos) {
+              ESP_LOGW("reply_speaker", "No reply speaker set; set the Reply speaker entity in Home Assistant");
+              return;
+            }
+            api::global_api_server->subscribe_home_assistant_state(
+                speaker, {}, std::function<void(StringRef)>([](StringRef state) {
+                  id(external_player_state).publish_state(state.c_str(), state.size());
+                }));
+    - priority: -100
+      then:
+        - micro_wake_word.disable_model: stop  # Enabled state is saved; never boot with it on
+        - script.execute: refresh_timer_text
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+psram:
+  mode: quad
+  speed: 80MHz
+
+api:
+  homeassistant_states: true  # Needed to follow the reply speaker's state from a lambda
+
+ota:
+  - platform: esphome
+
+logger:
+
+wifi:
+  ap:
+
+captive_portal:
+
+improv_serial:
+
+button:
+  - platform: factory_reset
+    id: factory_reset_btn
+    internal: true
+
+  - platform: template
+    id: sendspin_confirm_pairing
+    name: "Sendspin Confirm Pairing"
+    entity_category: config
+    icon: "mdi:link-variant"
+    on_press:
+      - sendspin.confirm_pairing_window:
+
+  - platform: template
+    name: "Virtual Touch"
+    id: virtual_touch
+    on_press:
+      - script.execute: handle_screen_tap
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      mode: INPUT_PULLUP
+      inverted: true
+    id: left_top_button
+    internal: true
+    on_multi_click:
+      - timing:
+          - ON for at least 50ms
+          - OFF for at least 50ms
+        then:
+          - script.execute: reset_led
+          - if:
+              condition:
+                switch.is_on: timer_ringing
+              then:
+                - switch.turn_off: timer_ringing
+              else:
+                - if:
+                    condition:
+                      not:
+                        voice_assistant.is_running:
+                    then:
+                      - voice_assistant.start:
+                    else:
+                      - voice_assistant.stop:
+
+      - timing:
+          - ON for at least 10s
+        then:
+          - button.press: factory_reset_btn
+
+  - platform: template
+    name: "Timer Ringing Active"
+    id: timer_ringing_active
+    device_class: sound
+    lambda: |-
+      return id(timer_ringing).state;
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led
+    name: LED
+    disabled_by_default: false
+    entity_category: config
+    pin: GPIO21
+    default_transition_length: 0s
+    chipset: WS2812
+    num_leds: 1
+    channel_colors: GRB
+    effects:
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: 50%
+          max_brightness: 100%
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 100ms
+          update_interval: 100ms
+          min_brightness: 50%
+          max_brightness: 100%
+
+i2s_audio:
+  - id: i2s_mic # For microphone
+    i2s_lrclk_pin: GPIO4 #WS 
+    i2s_bclk_pin: GPIO5  #SCK
+  - id: i2s_audio_bus # For speaker
+    i2s_lrclk_pin: GPIO16
+    i2s_bclk_pin: GPIO15
+
+# The mic source package needs this hub. The pairing code shows in HA ("Sendspin Pairing Code")
+sendspin:
+  id: sendspin_hub
+  on_pairing_succeeded:
+    - logger.log:
+        format: "Sendspin paired with server %s"
+        args: ['server_id.c_str()']
+  on_pairing_failed:
+    - logger.log:
+        format: "Sendspin pairing failed: %s"
+        args: ['reason.c_str()']
+
+microphone:
+  - platform: i2s_audio
+    i2s_audio_id: i2s_mic
+    adc_type: external
+    i2s_din_pin: GPIO6 #SD
+    id: raw_microphone  # Name the mic source package expects
+    channel: left
+    pdm: false
+    bits_per_sample: 16bit
+
+speaker:
+  - platform: i2s_audio
+    id: box_speaker
+    i2s_audio_id: i2s_audio_bus
+    dac_type: external
+    i2s_dout_pin: GPIO9  # Not connected; the dummy speaker only lets the local media player run
+    channel: stereo
+    buffer_duration: 1000ms
+
+media_player:
+  - platform: speaker
+    name: None
+    id: speaker_media_player
+    volume_min: 0.5
+    volume_max: 0.8
+    announcement_pipeline:
+      speaker: box_speaker
+      format: FLAC
+      sample_rate: 48000
+      num_channels: 1
+    on_announcement:
+      - if:
+          condition:
+            - switch.is_on: use_listen_light
+          then:
+            - light.turn_on:
+                id: led
+                blue: 100%
+                red: 0%
+                green: 0%
+                brightness: 100%
+                effect: none
+      # On-device wake words keep running during announcements so "stop" can be heard
+      - if:
+          condition:
+            - microphone.is_capturing:
+            - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
+          then:
+            - script.execute: stop_wake_word
+            - wait_until:
+                - not:
+                    voice_assistant.is_running:
+      - if:
+          condition:
+            not:
+              voice_assistant.is_running:
+          then:
+            - script.execute:
+                id: set_phase
+                phase: ${voice_assist_muted_phase_id}
+
+    on_idle:
+      # The silent local copy ends before the external speaker; on_end takes over then
+      - if:
+          condition:
+            lambda: return !id(external_reply_active);
+          then:
+            - script.execute: reset_led
+            - if:
+                condition:
+                  not:
+                    voice_assistant.is_running:
+                then:
+                  - script.execute: start_wake_word
+                  - script.execute: set_idle_or_mute_phase
+
+micro_wake_word:
+  id: mww
+  stop_after_detection: false  # Keep listening during replies so "stop" can be heard
+  models:
+    # Only enabled while a TTS reply plays or a timer rings
+    - model: https://github.com/kahrendt/microWakeWord/releases/download/stop/stop.json
+      id: stop
+      internal: true
+#    - okay_nabu
+    - hey_jarvis
+#    - alexa
+#    - hey_mycroft
+    - model: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/refs/heads/main/MicroWakeWords/models/v2/hey_sarah.json
+#    - model: https://raw.githubusercontent.com/JohnnyPrimus/Custom_V2_MicroWakeWords/refs/heads/main/models/computer/computer.json
+#    - model: https://raw.githubusercontent.com/JohnnyPrimus/Custom_V2_MicroWakeWords/refs/heads/main/models/hey_friday/hey_friday.json
+    - model: https://github.com/kahrendt/microWakeWord/releases/download/okay_nabu_20241226.3/okay_nabu.json
+#    - model: https://raw.githubusercontent.com/formatBCE/Respeaker-Lite-ESPHome-integration/refs/heads/main/microwakeword/models/v2/kenobi.json
+#    - model: https://raw.githubusercontent.com/esphome/micro-wake-word-models/refs/heads/main/models/v2/experiments/choo_choo_homie.json
+#    - model: https://raw.githubusercontent.com/esphome/micro-wake-word-models/refs/heads/main/models/v2/experiments/hey_home_assistant.json
+#    - model: https://raw.githubusercontent.com/esphome/micro-wake-word-models/refs/heads/main/models/v2/experiments/hey_peppa_pig.json
+#    - model: https://raw.githubusercontent.com/esphome/micro-wake-word-models/refs/heads/main/models/v2/experiments/okay_computer.json
+  on_wake_word_detected:
+    - if:
+        condition:
+          switch.is_on: timer_ringing
+        then:
+          - switch.turn_off: timer_ringing
+        else:
+          - if:
+              condition:
+                or:
+                  - voice_assistant.is_running:
+                  - media_player.is_announcing:
+                  - lambda: return id(external_reply_active);
+              then:
+                - voice_assistant.stop:
+                - media_player.stop:
+                    announcement: true
+                - if:
+                    condition:
+                      lambda: return id(external_reply_active);
+                    then:
+                      # media_stop can't reach announcements on every player; a new announcement replaces the reply
+                      - script.execute:
+                          id: play_on_speaker
+                          url: ${silence_url}
+                      # The reply is over; lets on_end return to idle right away
+                      - lambda: id(external_reply_active) = false;
+              else:
+                - voice_assistant.start:
+                    wake_word: !lambda return wake_word;
+
+voice_assistant:
+  id: va
+  microphone: raw_microphone
+  media_player: speaker_media_player
+  micro_wake_word: mww
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.0
+  on_listening:
+    - script.execute:
+        id: set_phase
+        phase: ${voice_assist_waiting_for_command_phase_id}
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              blue: 100%
+              red: 0%
+              green: 0%
+              effect: "Slow Pulse"
+  on_stt_vad_start:
+    - script.execute:
+        id: set_phase
+        phase: ${voice_assist_listening_phase_id}
+  on_stt_vad_end:
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              blue: 100%
+              red: 0%
+              green: 0%
+              effect: "Fast Pulse"
+    - script.execute:
+        id: set_phase
+        phase: ${voice_assist_thinking_phase_id}
+
+  on_stt_end:
+    - script.execute:
+        id: send_stt_text_event
+        stt_text: !lambda 'return x;'
+  on_tts_start:
+    - script.execute: activate_stop_word_once
+    - script.execute:
+        id: send_tts_text_event
+        tts_text: !lambda 'return x;'
+    - script.execute:
+        id: set_phase
+        phase: ${voice_assist_replying_phase_id}
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              blue: 100%
+              red: 0%
+              green: 0%
+              brightness: 100%
+              effect: none
+  on_tts_end:
+    # With music playing, the speaker reports "playing" throughout, so its state can't show the reply's end
+    - lambda: |-
+        id(external_music_playing) = id(external_player_state).state == "playing";
+        id(external_reply_active) = true;
+    # Play the reply on the external speaker; the local dummy player gets a silent copy
+    - script.execute:
+        id: play_on_speaker
+        url: !lambda return x;
+    - script.execute:
+        id: send_tts_uri_event
+        tts_uri: !lambda 'return x;'
+  on_end:
+    # Wait a short amount of time to see if an announcement starts
+    - wait_until:
+        condition:
+          - media_player.is_announcing:
+        timeout: 0.5s
+    # Announcement is finished and the I2S bus is free
+    - wait_until:
+        - and:
+            - not:
+                media_player.is_announcing:
+            - not:
+                speaker.is_playing:
+    # The silent local copy has ended, so the reply audio is done (it usually ends after the external
+    # speaker). Without music, also make sure the external speaker itself has gone idle
+    - if:
+        condition:
+          lambda: return id(external_reply_active) && !id(external_music_playing);
+        then:
+          # Ends when the speaker stops playing or "stop" was heard; the timeout only guards against a hang
+          - wait_until:
+              condition:
+                lambda: return id(external_player_state).state != "playing" || !id(external_reply_active);
+              timeout: 60s
+    - lambda: id(external_reply_active) = false;
+    # The voice assistant finishes a few ms after the local copy; a follow-up question keeps it running
+    - wait_until:
+        condition:
+          not:
+            voice_assistant.is_running:
+        timeout: 1s
+    - if:
+        condition:
+          not:
+            voice_assistant.is_running:
+        then:
+          # Restart only mWW if enabled; streaming wake words automatically restart
+          - if:
+              condition:
+                - lambda: return id(wake_word_engine_location).current_option() == "On device";
+                - not:
+                    micro_wake_word.is_running:
+              then:
+                - lambda: id(va).set_use_wake_word(false);
+                - micro_wake_word.start:
+          - script.execute: reset_led
+          - script.execute: set_idle_or_mute_phase
+
+  on_error:
+    - if:
+        condition:
+          lambda: return !id(init_in_progress);
+        then:
+          - script.execute:
+              id: set_phase
+              phase: ${voice_assist_error_phase_id}
+          - delay: 1s
+          - script.execute: set_idle_or_mute_phase
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              red: 100%
+              green: 0%
+              blue: 0%
+              brightness: 100%
+              effect: none
+    - delay: 2s
+    - script.execute: reset_led
+
+  on_client_connected:
+    - lambda: id(init_in_progress) = false;
+    - script.execute: start_wake_word
+    - script.execute: set_idle_or_mute_phase
+  on_client_disconnected:
+    - script.execute: stop_wake_word
+    - script.execute:
+        id: set_phase
+        phase: ${voice_assist_not_ready_phase_id}
+  on_timer_started:
+    - script.execute: refresh_timer_text
+  on_timer_updated:
+    - script.execute: refresh_timer_text
+  on_timer_cancelled:
+    - script.execute: refresh_timer_text
+  on_timer_tick:
+    - script.execute: refresh_timer_text
+  on_timer_finished:
+    - switch.turn_on: timer_ringing
+    - script.execute: refresh_timer_text
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              red: 0%
+              green: 100%
+              blue: 0%
+              brightness: 100%
+              effect: "Fast Pulse"
+    - script.execute:
+        id: set_phase
+        phase: ${voice_assist_timer_finished_phase_id}
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: led
+              blue: 0%
+              red: 100%
+              green: 0%
+              effect: "Fast Pulse"
+
+script:
+  - id: reset_led
+    then:
+      - if:
+          condition:
+            - lambda: return id(wake_word_engine_location).current_option() == "On device";
+            - switch.is_on: use_listen_light
+          then:
+            - light.turn_on:
+                id: led
+                red: 100%
+                green: 89%
+                blue: 71%
+                brightness: 30%
+                effect: none
+          else:
+            - if:
+                condition:
+                  - lambda: return id(wake_word_engine_location).current_option() != "On device";
+                  - switch.is_on: use_listen_light
+                then:
+                  - light.turn_on:
+                      id: led
+                      red: 0%
+                      green: 100%
+                      blue: 100%
+                      brightness: 30%
+                      effect: none
+                else:
+                  - light.turn_off: led
+
+  # Starts either mWW or the streaming wake word, depending on the configured location
+  - id: start_wake_word
+    then:
+      - if:
+          condition:
+            and:
+              - not:
+                  - voice_assistant.is_running:
+              - not:
+                  - micro_wake_word.is_running:
+              - lambda: return id(wake_word_engine_location).current_option() == "On device";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - micro_wake_word.start:
+      - if:
+          condition:
+            and:
+              - not:
+                  - voice_assistant.is_running:
+              - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(true);
+            - voice_assistant.start_continuous:
+  # Stops either mWW or the streaming wake word, depending on the configured location
+  - id: stop_wake_word
+    then:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - voice_assistant.stop:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).current_option() == "On device";
+          then:
+            - micro_wake_word.stop:
+  # Set the voice assistant phase to idle or muted, depending on if the software mute switch is activated
+  - id: set_idle_or_mute_phase
+    then:
+      - if:
+          condition:
+            switch.is_off: mute
+          then:
+            - script.execute:
+                id: set_phase
+                phase: ${voice_assist_idle_phase_id}
+          else:
+            - script.execute:
+                id: set_phase
+                phase: ${voice_assist_muted_phase_id}
+
+
+  # Listens for "stop" while a voice reply plays, skipping its first second
+  - id: activate_stop_word_once
+    mode: restart
+    then:
+      - wait_until:
+          condition:
+            or:
+              - media_player.is_announcing:
+              - lambda: return id(external_player_state).state == "playing";
+          timeout: 5s
+      - delay: 1s
+      - if:
+          condition:
+            switch.is_off: timer_ringing
+          then:
+            - micro_wake_word.enable_model: stop
+      # on_end clears external_reply_active once the external speaker is done
+      - wait_until:
+          condition:
+            and:
+              - not:
+                  media_player.is_announcing:
+              - lambda: return !id(external_reply_active);
+          timeout: 5min
+      - if:
+          condition:
+            switch.is_off: timer_ringing
+          then:
+            - micro_wake_word.disable_model: stop
+
+  # Repeats the alarm on the external speaker; gives up after 15 minutes
+  - id: ring_external_alarm
+    mode: restart
+    then:
+      - repeat:
+          count: 300  # 300 × 3 s = 15 min
+          then:
+            - script.execute:
+                id: play_on_speaker
+                url: ${timer_finished_sound_url}
+            - delay: 3s  # 2 s sample + 1 s pause
+      - switch.turn_off: timer_ringing
+
+  # Plays a URL as an announcement on the reply speaker
+  - id: play_on_speaker
+    mode: parallel
+    parameters:
+      url: string
+    then:
+      - if:
+          condition:
+            lambda: return id(reply_speaker).state.find('.') != std::string::npos;
+          then:
+            - homeassistant.action:
+                action: media_player.play_media
+                data:
+                  entity_id: !lambda return id(reply_speaker).state;
+                  media_content_id: !lambda return url;
+                  media_content_type: music
+                  announce: "true"
+
+  - id: refresh_timer_text
+    mode: restart
+    then:
+      - delay: 10ms  # on_timer_cancelled fires before the timer leaves the list
+      - lambda: |-
+          if (id(timer_ringing).state) {
+            id(timer_countdown).publish_state("Ringing");
+            return;
+          }
+          // Shortest running timer; fall back to a paused one
+          const voice_assistant::Timer *best = nullptr;
+          for (auto &t : id(va).get_timers()) {
+            if (best == nullptr || (t.is_active && !best->is_active) ||
+                (t.is_active == best->is_active && t.seconds_left < best->seconds_left)) {
+              best = &t;
+            }
+          }
+          if (best == nullptr) {
+            id(timer_countdown).publish_state("Idle");
+            return;
+          }
+          uint32_t s = best->seconds_left;
+          char buf[24];
+          if (s >= 3600) {
+            snprintf(buf, sizeof(buf), "%u:%02u:%02u", (unsigned) (s / 3600), (unsigned) (s / 60 % 60), (unsigned) (s % 60));
+          } else {
+            snprintf(buf, sizeof(buf), "%u:%02u", (unsigned) (s / 60), (unsigned) (s % 60));
+          }
+          std::string text = buf;
+          if (!best->is_active) text += " paused";
+          id(timer_countdown).publish_state(text);
+
+  - id: send_tts_uri_event
+    parameters:
+      tts_uri: string
+    then:
+      - homeassistant.event:
+          event: esphome.tts_uri
+          data:
+            node: ${name}
+            uri: !lambda return tts_uri;
+  - id: send_stt_text_event
+    parameters:
+      stt_text: string
+    then:
+      - homeassistant.event:
+          event: esphome.stt_text
+          data:
+            node: ${name}
+            text: !lambda return stt_text;
+  - id: send_tts_text_event
+    parameters:
+      tts_text: string
+    then:
+      - homeassistant.event:
+          event: esphome.tts_text
+          data:
+            node: ${name}
+            text: !lambda return tts_text;
+
+  - id: set_phase
+    parameters:
+      phase: int
+    then:
+      - lambda: id(voice_assistant_phase) = phase;
+      - text_sensor.template.publish:
+          id: voice_assistant_phase_sensor
+          state: !lambda |-
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d", phase);
+            return std::string(buf);
+      - homeassistant.event:
+          event: esphome.phase_id
+          data:
+            node: ${name}
+            phase: !lambda return phase;
+
+  - id: handle_screen_tap
+    then:
+      - script.execute: reset_led
+      - if:
+          condition:
+            switch.is_on: timer_ringing
+          then:
+            - switch.turn_off: timer_ringing
+          else:
+            - if:
+                condition:
+                  lambda: return id(wake_word_engine_location).current_option() == "On device";
+                then:
+                  - if:
+                      condition:
+                        not:
+                          voice_assistant.is_running:
+                      then:
+                        - voice_assistant.start:
+                      else:
+                        - voice_assistant.stop:
+
+switch:
+  - platform: sendspin
+    id: sendspin_unpaired_access
+    name: "Sendspin Unpaired Access"
+    type: unpaired_access
+  - platform: template
+    name: Use listen light
+    id: use_listen_light
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - script.execute: reset_led
+    on_turn_off:
+      - script.execute: reset_led
+  - platform: template
+    name: Mute
+    id: mute
+    icon: "mdi:microphone-off"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    on_turn_off:
+      - microphone.unmute:
+      - script.execute:
+          id: set_phase
+          phase: ${voice_assist_idle_phase_id}
+    on_turn_on:
+      - microphone.mute:
+      - script.execute:
+          id: set_phase
+          phase: ${voice_assist_muted_phase_id}
+  - platform: template
+    id: timer_ringing
+    optimistic: true
+    internal: true
+    restore_mode: ALWAYS_OFF
+    on_turn_off:
+      - micro_wake_word.disable_model: stop
+      - script.stop: ring_external_alarm
+      - script.execute: refresh_timer_text
+      - script.execute: reset_led
+      - if:
+          condition:
+            not:
+              voice_assistant.is_running:
+          then:
+            - script.execute: set_idle_or_mute_phase
+    on_turn_on:
+      - micro_wake_word.enable_model: stop
+      - script.execute: ring_external_alarm
+
+text:
+  - platform: template
+    id: reply_speaker
+    name: "Reply speaker"
+    icon: "mdi:speaker"
+    mode: text
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: ${external_media_player}
+    on_value:
+      # Its state is only followed from boot, so a new speaker needs a restart
+      - if:
+          condition:
+            lambda: return id(speaker_tracking_started) && x != id(tracked_speaker);
+          then:
+            - delay: 1s  # Let HA see the new value first
+            - lambda: App.safe_reboot();
+
+select:
+  - platform: template
+    entity_category: config
+    name: Wake word engine location
+    id: wake_word_engine_location
+    icon: "mdi:account-voice"
+    optimistic: true
+    restore_value: true
+    options:
+      - In Home Assistant
+      - On device
+    initial_option: On device
+    on_value:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - wait_until:
+                lambda: return id(voice_assistant_phase) == ${voice_assist_muted_phase_id} || id(voice_assistant_phase) == ${voice_assist_idle_phase_id};
+            - if:
+                condition:
+                  lambda: return x == "In Home Assistant";
+                then:
+                  - micro_wake_word.stop
+                  - delay: 500ms
+                  - if:
+                      condition:
+                        switch.is_off: mute
+                      then:
+                        - lambda: id(va).set_use_wake_word(true);
+                        - voice_assistant.start_continuous:
+            - if:
+                condition:
+                  lambda: return x == "On device";
+                then:
+                  - lambda: id(va).set_use_wake_word(false);
+                  - voice_assistant.stop
+                  - delay: 500ms
+                  - if:
+                      condition:
+                        switch.is_off: mute
+                      then:
+                        - micro_wake_word.start
+
+globals:
+  - id: init_in_progress
+    type: bool
+    restore_value: false
+    initial_value: "true"
+  # True from the reply URL until the external speaker has finished playing it
+  - id: external_reply_active
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # Whether the external speaker was already playing (music) when the reply was sent
+  - id: external_music_playing
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # The reply speaker whose state is followed, set at boot
+  - id: tracked_speaker
+    type: std::string
+    restore_value: false
+  - id: speaker_tracking_started
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: voice_assistant_phase
+    type: int
+    restore_value: false
+    initial_value: ${voice_assist_not_ready_phase_id}
+
+text_sensor:
+  - platform: sendspin
+    id: sendspin_pairing_code
+    name: "Sendspin Pairing Code"
+    type: pairing_code
+
+  # State of the reply speaker, fed by the subscription made at boot
+  - platform: template
+    id: external_player_state
+    internal: true
+    update_interval: never
+
+  - platform: template
+    id: timer_countdown
+    name: "Timer"
+    icon: "mdi:timer-outline"
+    update_interval: never
+
+  - platform: template
+    id: voice_assistant_phase_sensor
+    name: "Voice Assistant Phase ID"
+    update_interval: never
