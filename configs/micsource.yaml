@@ -1,0 +1,78 @@
+# Streams the mic to Music Assistant as a Sendspin source, with the hub and pairing it needs.
+# Include it as a package; the device must have a microphone with id: raw_microphone
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/ApolloAutomation/CAST_PRO-1
+      ref: 743af5bd27ed4281eebe9bdfbab7150aaa43e199
+      path: Integrations/ESPHome/components
+    components: [sendspin_source]
+
+# The pairing code shows in HA ("Sendspin Pairing Code")
+sendspin:
+  id: sendspin_hub
+  on_pairing_succeeded:
+    - logger.log:
+        format: "Sendspin paired with server %s"
+        args: ['server_id.c_str()']
+  on_pairing_failed:
+    - logger.log:
+        format: "Sendspin pairing failed: %s"
+        args: ['reason.c_str()']
+
+sendspin_source:
+  id: mic_source
+  sendspin_id: sendspin_hub
+  microphone:
+    microphone: raw_microphone
+    channels: [0]
+    bits_per_sample: 16
+    gain_factor: 1
+  codec: pcm
+  chunk_duration: 20ms
+  capture_buffer: 500ms
+  on_streaming_started:
+    - binary_sensor.template.publish:
+        id: line_in_streaming
+        state: ON
+  on_streaming_stopped:
+    - binary_sensor.template.publish:
+        id: line_in_streaming
+        state: OFF
+
+binary_sensor:
+  - platform: template
+    id: line_in_streaming
+    name: "Mic Source Streaming"
+    icon: mdi:microphone-message
+    entity_category: diagnostic
+
+button:
+  - platform: template
+    id: sendspin_confirm_pairing
+    name: "Sendspin Confirm Pairing"
+    entity_category: config
+    icon: "mdi:link-variant"
+    on_press:
+      - sendspin.confirm_pairing_window:
+
+switch:
+  - platform: sendspin
+    id: sendspin_unpaired_access
+    name: "Sendspin Unpaired Access"
+    type: unpaired_access
+
+text_sensor:
+  - platform: sendspin
+    id: sendspin_pairing_code
+    name: "Sendspin Pairing Code"
+    type: pairing_code
+
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: OFF
