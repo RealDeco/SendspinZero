@@ -19,14 +19,14 @@ substitutions:
   # Short silent announcement that replaces a running reply when "stop" is heard
   silence_url: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/sounds/silence.wav
 
-packages:
-  # Streams the mic to Music Assistant as a Sendspin source; remove this and the sendspin: hub to turn it off
-  micsource:
-    url: https://github.com/RealDeco/sendspin-guition.git
-    ref: main
-    refresh: 0s
-    files:
-      - Other/micsource.yaml
+#packages:
+#  # Streams the mic to Music Assistant as a Sendspin source, with its pairing; comment out to turn it off
+#  micsource:
+#    url: https://github.com/RealDeco/SendspinZero.git
+#    ref: main
+#    refresh: 0s
+#    files:
+#      - configs/micsource.yaml
 
 esphome:
   name: ${name}
@@ -94,14 +94,6 @@ button:
   - platform: factory_reset
     id: factory_reset_btn
     internal: true
-
-  - platform: template
-    id: sendspin_confirm_pairing
-    name: "Sendspin Confirm Pairing"
-    entity_category: config
-    icon: "mdi:link-variant"
-    on_press:
-      - sendspin.confirm_pairing_window:
 
   - platform: template
     name: "Virtual Touch"
@@ -182,18 +174,6 @@ i2s_audio:
   - id: i2s_audio_bus # For speaker
     i2s_lrclk_pin: GPIO16
     i2s_bclk_pin: GPIO15
-
-# The mic source package needs this hub. The pairing code shows in HA ("Sendspin Pairing Code")
-sendspin:
-  id: sendspin_hub
-  on_pairing_succeeded:
-    - logger.log:
-        format: "Sendspin paired with server %s"
-        args: ['server_id.c_str()']
-  on_pairing_failed:
-    - logger.log:
-        format: "Sendspin pairing failed: %s"
-        args: ['reason.c_str()']
 
 microphone:
   - platform: i2s_audio
@@ -761,10 +741,6 @@ script:
                         - voice_assistant.stop:
 
 switch:
-  - platform: sendspin
-    id: sendspin_unpaired_access
-    name: "Sendspin Unpaired Access"
-    type: unpaired_access
   - platform: template
     name: Use listen light
     id: use_listen_light
@@ -904,11 +880,6 @@ globals:
     initial_value: ${voice_assist_not_ready_phase_id}
 
 text_sensor:
-  - platform: sendspin
-    id: sendspin_pairing_code
-    name: "Sendspin Pairing Code"
-    type: pairing_code
-
   # State of the reply speaker, fed by the subscription made at boot
   - platform: template
     id: external_player_state
