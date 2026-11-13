@@ -22,7 +22,7 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - script.execute: led_red
+      - script.execute: try_led_red
 
 esp32:
   variant: esp32s3
@@ -160,9 +160,9 @@ media_player:
               state == MediaPlayerState::MEDIA_PLAYER_STATE_PLAYING ||
               state == MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING
             ) {
-              id(led_green).execute();
+              id(try_led_green).execute();
             } else {
-              id(led_red).execute();
+              id(try_led_red).execute();
             }
         - if:
             condition:
@@ -197,23 +197,31 @@ script:
               .perform();
           }
 
-  - id: led_red
+  - id: try_led_red
     then:
-      - light.turn_on:
-          id: led
-          red: 100%
-          green: 0%
-          blue: 0%
-          brightness: 100%
+      - if:
+          condition:
+            switch.is_on: led_switch
+          then:
+            - light.turn_on:
+                id: led
+                red: 100%
+                green: 0%
+                blue: 0%
+                brightness: 100%
 
-  - id: led_green
+  - id: try_led_green
     then:
-      - light.turn_on:
-          id: led
-          red: 0%
-          green: 100%
-          blue: 0%
-          brightness: 100%
+      - if:
+          condition:
+            switch.is_on: led_switch
+          then:
+            - light.turn_on:
+                id: led
+                red: 0%
+                green: 100%
+                blue: 0%
+                brightness: 100%
 
 switch:
   - platform: template
@@ -229,6 +237,16 @@ switch:
     type: unpaired_access
     name: "Sendspin Unpaired Access"
     restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: template
+    id: led_switch
+    name: Enable LED
+    icon: "mdi:led-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_off_action:
+      - light.turn_off: led
 
 button:
   - platform: restart
