@@ -16,7 +16,7 @@ esphome:
   min_version: 2026.11.0b1
   name_add_mac_suffix: false
   project:
-    name: realdeco.zero_va
+    name: realdeco.zero_usb
     version: "2026.11.0"
   on_boot:
     - priority: -100
