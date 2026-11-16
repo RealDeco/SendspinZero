@@ -278,12 +278,7 @@ media_player:
                       condition:
                         - not:
                             voice_assistant.is_running:
-            - light.turn_on:
-                id: led
-                blue: 0%
-                red: 0%
-                green: 100%
-                effect: "Slow Pulse"
+      - script.execute: music_led
       - if:
           condition:
             lambda: 'return id(playing_internal_sound);'
@@ -405,6 +400,14 @@ voice_assistant:
             - not:
                 speaker.is_playing:
                   id: announcement_resampling_speaker
+    # Music still playing goes back to its music light
+    - if:
+        condition:
+          media_player.is_playing: speaker_media_player
+        then:
+          - script.execute: music_led
+        else:
+          - script.execute: reset_led
     - if:
         condition:
           lambda: return id(wake_word_engine_location).current_option() == "On device";
@@ -479,6 +482,22 @@ script:
           then:
             - script.execute: reset_led
             - script.execute: start_wake_word
+  # While music plays: green slow pulse, or the normal idle light when "Use music light" is off
+  - id: music_led
+    then:
+      - if:
+          condition:
+            switch.is_on: use_music_light
+          then:
+            - light.turn_on:
+                id: led
+                blue: 0%
+                red: 0%
+                green: 100%
+                effect: "Slow Pulse"
+          else:
+            - script.execute: reset_led
+
   - id: reset_led
     then:
       - if:
@@ -646,6 +665,25 @@ switch:
       - script.execute: reset_led
     on_turn_off:
       - script.execute: reset_led
+  - platform: template
+    name: Use music light
+    id: use_music_light
+    icon: "mdi:music-note"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - if:
+          condition:
+            media_player.is_playing: speaker_media_player
+          then:
+            - script.execute: music_led
+    on_turn_off:
+      - if:
+          condition:
+            media_player.is_playing: speaker_media_player
+          then:
+            - script.execute: music_led
   - platform: template
     name: Mute
     id: mute
