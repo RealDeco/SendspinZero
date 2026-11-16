@@ -545,8 +545,45 @@ Keeping the microphone separate from the speaker makes it easier for the assista
 
 * **1 × ESP32-S3 Zero**
   [https://www.aliexpress.com/item/1005009890203011.html](https://www.aliexpress.com/item/1005009890203011.html)
-* 1 × INMP441 microphone*
+* 1 × INMP441 microphone
   [https://www.aliexpress.com/item/1005012097806013.html](https://www.aliexpress.com/item/1005012097806013.html)
+
+---
+
+## SendspinZero-USB
+
+This one is a little different from the other SendspinZero devices. There are no audio components to wire up, just two wires for power!
+
+<img width="300" src="https://github.com/user-attachments/assets/a1c3251e-4798-446e-bf81-f5aaf2e43461" />
+
+<img width="300" src="https://github.com/user-attachments/assets/9e113583-8c35-4b08-a658-ec26416de624" />
+
+You’ll find the 3D files in the [`3D_Files`](3D_Files) folder.
+
+That leaves the Zero’s USB port free for a USB sound card dongle (UAC 1.0). Hook up the dongle’s output to your stereo or powered speakers, plug a 3.5 mm microphone of your choice into its input, and you’ve got a voice assistant, a Sendspin music player, or both.
+
+<img width="600" src="https://github.com/user-attachments/assets/ff348df7-3005-4760-a64b-5793950674b7" />
+
+## Pin Mapping
+
+### ESP32-S3 → INMP441
+
+| Zero  | USB PLUG |
+| ----- | ---------|
+| GND		| GND 	|
+| 5V  	| 5V  	|
+
+
+## Parts List
+
+* 1 × ESP32-S3 Zero (doh)
+  [https://www.aliexpress.com/item/1005009890203011.html](https://www.aliexpress.com/item/1005009890203011.html)
+* 1 × USC-C module
+  [https://www.aliexpress.com/item/32894272386.html](https://www.aliexpress.com/item/32894272386.html)
+
+This is just the USB-C module I had on hand and what the case is made for. Any USB-C module that provides the 5 V and GND connections we need will do. Leave this module’s TX and RX pins disconnected. They use 5 V logic, and the ESP32-S3 Zero uses 3.3 V logic.
+
+Soundcard dongle i used [https://www.aliexpress.com/item/1005006117722774.html](https://www.aliexpress.com/item/1005006117722774.html)
 
 ---
 
