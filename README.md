@@ -583,6 +583,8 @@ That leaves the Zero’s USB port free for a USB sound card dongle (UAC 1.0). Ho
 
 This is just the USB-C module I had on hand and what the case is made for. Any USB-C module that provides the 5 V and GND connections we need will do. Leave this module’s TX and RX pins disconnected. They use 5 V logic, and the ESP32-S3 Zero uses 3.3 V logic.
 
+WARNING!, do NOT connect a charger to both usb ports, it can damage the device.
+
 Soundcard dongle i used [https://www.aliexpress.com/item/1005006117722774.html](https://www.aliexpress.com/item/1005006117722774.html)
 
 ---
