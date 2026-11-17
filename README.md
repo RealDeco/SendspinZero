@@ -566,7 +566,7 @@ That leaves the Zero’s USB port free for a USB sound card dongle (UAC 1.0). Ho
 
 ## Pin Mapping
 
-### ESP32-S3 → INMP441
+### ESP32-S3 → USB-C module
 
 | Zero  | USB PLUG |
 | ----- | ---------|
