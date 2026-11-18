@@ -1,0 +1,73 @@
+# LD2410C mmWave radar, included as a package from s31-function-coreboard-display.yaml.
+# Wiring: OUT -> GPIO35, ESP TX GPIO37 -> radar RX, radar TX -> ESP RX GPIO39.
+# GPIO37 is a strapping pin; it only drives the radar's RX input, so boot is unaffected.
+# No data on the UART sensors? Swap tx_pin and rx_pin.
+
+uart:
+  - id: ld2410_uart
+    tx_pin: GPIO37
+    rx_pin: GPIO39
+    baud_rate: 256000
+    parity: NONE
+    stop_bits: 1
+
+ld2410:
+  id: ld2410_radar
+  uart_id: ld2410_uart
+
+binary_sensor:
+  # OUT pin (high = presence), independent of the UART
+  - platform: gpio
+    id: ld2410_out
+    name: "Radar OUT Pin"
+    device_class: occupancy
+    pin:
+      number: GPIO35
+      mode:
+        input: true
+        pulldown: true
+  # Presence from the UART frames
+  - platform: ld2410
+    has_target:
+      name: "Radar Presence"
+    has_moving_target:
+      name: "Radar Moving Target"
+    has_still_target:
+      name: "Radar Still Target"
+    out_pin_presence_status:
+      name: "Radar OUT Status"
+
+sensor:
+  # Light and per-gate energy need the "Radar Engineering Mode" switch on
+  - platform: ld2410
+    moving_distance:
+      name: "Radar Moving Distance"
+    still_distance:
+      name: "Radar Still Distance"
+    moving_energy:
+      name: "Radar Moving Energy"
+    still_energy:
+      name: "Radar Still Energy"
+    detection_distance:
+      name: "Radar Detection Distance"
+    light:
+      name: "Radar Light"
+
+text_sensor:
+  - platform: ld2410
+    version:
+      name: "Radar Firmware"
+    mac_address:
+      name: "Radar MAC"
+
+switch:
+  - platform: ld2410
+    engineering_mode:
+      name: "Radar Engineering Mode"
+
+button:
+  - platform: ld2410
+    query_params:
+      name: "Radar Query Params"
+    restart:
+      name: "Radar Restart"
