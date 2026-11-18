@@ -1,0 +1,4224 @@
+substitutions:
+  startup_sound_file: "Home_Connected" # (options are: available, Home_Connected, Home_Connected_Male, Computer_Ready)
+  wakeup_sound: "popup" # (options are: popup, wake_word_triggered)
+
+  va_microphone: usb_voice_mic # (options are: onboard_voice_mic, usb_voice_mic)
+  va_speaker: onboard_announcement_input # Voice replies and sounds (options are: usb_announcement_resampler, onboard_announcement_input)
+  music_speaker: usb_media_resampler # Music (options are: usb_media_resampler, onboard_media_input)
+  micsource_microphone: usb_mic  # Used by the micsource-beta package
+
+  # Voice assistant images and the fallback image when a track has no album art
+  # (options are: AlbertQuackmore,Alfred,Alita,Astrobot,Buzz,Casita,Cybergirl,Dory,EVE,Eyes,Eyes2,GLaDOS,Girl1,Guy1,Guy2
+  # Gwen,Gwen_Black,HA-character,ha-girl,Hacker,Harley,Jarvis,Luffy,Mario,Max,Prime,Robochibi,Robocop,Robot,Robotgirl,Salem
+  # Sarah,Shaun)
+  imagemodel: "Gwen_Black"
+
+  # Home Assistant weather entity for the idle clock page
+  ha_weather_entity: weather.forecast_home
+
+  # Rooms clock: presence and light per room (binary sensors in Home Assistant)
+  sensor1_entity: "binary_sensor.room_1_presence"
+  light1_entity: "binary_sensor.room_1_light"
+  sensor2_entity: "binary_sensor.room_2_presence"
+  light2_entity: "binary_sensor.room_2_light"
+  sensor3_entity: "binary_sensor.room_3_presence"
+  light3_entity: "binary_sensor.room_3_light"
+  sensor4_entity: "binary_sensor.room_4_presence"
+  light4_entity: "binary_sensor.room_4_light"
+  sensor5_entity: "binary_sensor.room_5_presence"
+  light5_entity: "binary_sensor.room_5_light"
+  sensor6_entity: "binary_sensor.room_6_presence"
+  light6_entity: "binary_sensor.room_6_light"
+
+  # Display size, used by the clock drawings
+  screenwidth: "240"
+  screenheight: "240"
+  imagewidth: "240"
+  imageheight: "240"
+
+  # Display rotation, 0 degree (for 180 degree: mirror_x and mirror_y "true", offset_height "80")
+  display_swap_xy: "false"
+  display_mirror_x: "false"
+  display_mirror_y: "false"
+  display_offset_width: "0"
+  display_offset_height: "0"
+
+  # Voice assistant images, from the ${imagemodel} folder
+  waiting_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/idle.png
+  listening_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/listening.png
+  thinking_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/thinking.png
+  replying_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/replying.png
+  error_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/error.png
+  timer_finished_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/timer_finished.png
+  loading_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/loading.png
+  mute_illustration_file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/mute.png
+
+  # Voice assistant phases
+  va_phase_idle: "0"
+  va_phase_waiting_for_command: "1"
+  va_phase_listening: "2"
+  va_phase_thinking: "3"
+  va_phase_replying: "4"
+  va_phase_error: "5"
+  va_phase_timer_ringing: "6"
+  va_phase_not_ready: "7"
+
+  # Clock styles (the "Clock Style" select in Home Assistant)
+  clock_style_digital: "0"
+  clock_style_analog: "1"
+  clock_style_rooms: "2"
+  clock_style_retro: "3"
+  clock_style_mario: "4"
+  clock_style_photo: "5"
+  clock_style_cyber: "6"
+
+# Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Uncomment to add it.
+#packages:
+#  micsource:
+#    url: https://github.com/RealDeco/SendspinZero
+#    ref: main
+#    refresh: 1d
+#    files: [configs/micsource-beta.yaml]
+
+esphome:
+  name: s31-function-coreboard
+  # Also the player name Sendspin reports to Music Assistant
+  friendly_name: S31 Function CoreBoard
+  # usb_audio first shipped in 2026.11.0
+  min_version: 2026.11.0b1
+  on_boot:
+    - priority: -100
+      then:
+        - micro_wake_word.disable_model: stop
+        - script.execute: apply_outputs
+        - lvgl.page.show: idle_page
+        - lambda: id(display_ready) = true;
+        - script.execute: update_mute_icon
+        - script.execute:
+            id: set_va_phase
+            phase: !lambda return id(va_phase);
+        - script.execute: apply_accent_color
+        - script.execute:
+            id: apply_clock_style
+            style_mode: !lambda |-
+              std::string opt = id(clock_style_choice).current_option();
+              if (opt == "Analog Clock") return ${clock_style_analog};
+              if (opt == "Rooms") return ${clock_style_rooms};
+              if (opt == "Retro") return ${clock_style_retro};
+              if (opt == "Mario") return ${clock_style_mario};
+              if (opt == "Family Photo") return ${clock_style_photo};
+              if (opt == "Cyberclock") return ${clock_style_cyber};
+              return ${clock_style_digital};
+        - if:
+            condition:
+              switch.is_on: ethernet_switch
+            then:
+              - ethernet.enable:
+        # The background and the family photo are downloaded, so wait for the network
+        - wait_until:
+            condition:
+              lambda: return network::is_connected();
+            timeout: 60s
+        - if:
+            condition:
+              switch.is_on: standby_background_enabled
+            then:
+              - script.execute: load_standby_background
+        - script.execute: load_family_photo
+
+esp32:
+  variant: esp32s31
+  framework:
+    type: esp-idf
+    # ESP-IDF 6.1 is the first release with the ESP32-S31 target
+    version: 6.1.0
+    advanced:
+      flash_chip: generic
+    sdkconfig_options:
+      # Octal PSRAM holds MPLL at 400 MHz, which cannot be divided down to RGMII's 125 MHz; use the Audio PLL
+      CONFIG_ETH_EMAC_RGMII_TX_CLK_SRC_APLL: y
+  flash_size: 16MB
+  # Ethernet setup blocks ~4.8 s at boot; with the display's setup on top, the default 5 s trips the task watchdog
+  watchdog_timeout: 15s
+
+psram:
+  mode: octal
+
+# Activates the built-in USB-Serial-JTAG logic for direct logging
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+
+api:
+  on_client_connected:
+    - delay: 2000ms
+    - lambda: |-
+        if (!id(boot_sound_played)) {
+          id(boot_sound_played) = true;
+          if (id(startup_sound_switch).state) {
+            id(play_sound)->execute(true, std::string("ready_sound"));
+          }
+        }
+
+ota:
+  - platform: esphome
+
+web_server:
+  port: 80
+  version: 3
+
+wifi:
+  id: wifi_1
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Prefer the wired link; both interfaces must be listed when Wi-Fi and Ethernet are configured together
+network:
+  priority:
+    - ethernet
+    - wifi
+
+# Wired Gigabit Ethernet: onboard Motorcomm YT8531 PHY over RGMII. It has its own MAC, so DHCP gives it its own IP.
+# Started from on_boot when the "Ethernet" switch is on. Without a cable it retries every 15 s, and each retry
+# clears the DNS servers Wi-Fi is using (ESPHome 2026.11.0b7), so keep the switch off when no cable is used.
+ethernet:
+  id: ethernet_1
+  type: YT8531
+  mdc_pin: GPIO5
+  mdio_pin: GPIO6
+  power_pin: GPIO7
+  enable_on_boot: false
+  # Wi-Fi is only a fallback: off while the wired link has an address, back on when it drops
+  on_connect:
+    - wifi.disable:
+  on_disconnect:
+    - wifi.enable:
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    on_time_sync:
+      - component.update: clock_hms
+      - component.update: clock_date
+
+# Clock faces drawn on a canvas; each script only draws while its style is showing
+interval:
+  - interval: 1s
+    then:
+      - script.execute: analog_clock_redraw
+      - script.execute: retro_clock_redraw
+      - script.execute: mario_clock_tick
+
+globals:
+  - id: pairing_overlay
+    type: lv_obj_t*
+    restore_value: no
+    initial_value: "nullptr"
+
+  - id: pairing_code_label
+    type: lv_obj_t*
+    restore_value: no
+    initial_value: "nullptr"
+
+  - id: sendspin_album_art_valid
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: last_album_art_valid
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: weather_available
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: display_ready
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: va_phase
+    type: int
+    restore_value: no
+    initial_value: ${va_phase_not_ready}
+
+  - id: playing_internal_sound
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: boot_sound_played
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: accent_red
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent_green
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent_blue
+    type: int
+    restore_value: yes
+    initial_value: "0"
+
+  - id: accent2_red
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent2_green
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent2_blue
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent3_red
+    type: int
+    restore_value: yes
+    initial_value: "102"
+
+  - id: accent3_green
+    type: int
+    restore_value: yes
+    initial_value: "204"
+
+  - id: accent3_blue
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent4_red
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent4_green
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: accent4_blue
+    type: int
+    restore_value: yes
+    initial_value: "255"
+
+  - id: analog_clock_canvas_widget
+    type: lv_obj_t*
+    restore_value: no
+    initial_value: "nullptr"
+
+  - id: retro_static_buf
+    type: uint8_t*
+    restore_value: no
+    initial_value: "nullptr"
+
+  - id: clock_style_mode
+    type: int
+    restore_value: no
+    initial_value: "${clock_style_digital}"
+
+  - id: mario_anim_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: mario_y_offset
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+  - id: mario_direction_up
+    type: bool
+    restore_value: no
+    initial_value: "true"
+
+  - id: mario_last_minute
+    type: int
+    restore_value: no
+    initial_value: "-1"
+
+  - id: hourblock_offset
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+  - id: hourblock_bouncing
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: hourblock_going_up
+    type: bool
+    restore_value: no
+    initial_value: "true"
+
+  - id: minuteblock_offset
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+  - id: minuteblock_bouncing
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: minuteblock_going_up
+    type: bool
+    restore_value: no
+    initial_value: "true"
+
+  - id: mario_displayed_hour
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+  - id: mario_displayed_minute
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+light:
+  - platform: monochromatic
+    id: screen_backlight
+    name: Screen
+    icon: "mdi:television"
+    output: backlight_output
+    restore_mode: RESTORE_DEFAULT_ON
+    default_transition_length: 250ms
+
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    name: "Onboard RGB Status LED"
+    pin: GPIO60
+    num_leds: 1
+    chipset: WS2812
+    channel_colors: GRB
+    default_transition_length: 0s
+    effects:
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: 50%
+          max_brightness: 100%
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 100ms
+          update_interval: 100ms
+          min_brightness: 50%
+          max_brightness: 100%
+
+  # Clock colours, set from Home Assistant. 1: time and temperature, 2: date and weather icon,
+  # 3: weather line, rooms clock and analog hands, 4: Cyberclock text
+
+  - platform: rgb
+    id: accent_color_picker_1
+    name: Accent color 1
+    icon: "mdi:palette"
+    entity_category: config
+    red: accent_color_r
+    green: accent_color_g
+    blue: accent_color_b
+    restore_mode: RESTORE_DEFAULT_ON
+    initial_state:
+      red: 100%
+      green: 100%
+      blue: 0%
+    default_transition_length: 0s
+
+  - platform: rgb
+    id: accent_color_picker_2
+    name: Accent color 2
+    icon: "mdi:palette"
+    entity_category: config
+    red: accent_color2_r
+    green: accent_color2_g
+    blue: accent_color2_b
+    restore_mode: RESTORE_DEFAULT_ON
+    initial_state:
+      red: 100%
+      green: 100%
+      blue: 100%
+    default_transition_length: 0s
+
+  - platform: rgb
+    id: accent_color_picker_3
+    name: Accent color 3
+    icon: "mdi:palette"
+    entity_category: config
+    red: accent_color3_r
+    green: accent_color3_g
+    blue: accent_color3_b
+    restore_mode: RESTORE_DEFAULT_ON
+    initial_state:
+      red: 40%
+      green: 80%
+      blue: 100%
+    default_transition_length: 0s
+
+  - platform: rgb
+    id: accent_color_picker_4
+    name: Accent color 4
+    icon: "mdi:palette"
+    entity_category: config
+    red: accent_color4_r
+    green: accent_color4_g
+    blue: accent_color4_b
+    restore_mode: RESTORE_DEFAULT_ON
+    initial_state:
+      red: 100%
+      green: 100%
+      blue: 100%
+    default_transition_length: 0s
+
+binary_sensor:
+  - platform: gpio
+    id: boot_button
+    name: "Boot Button"
+    pin:
+      number: GPIO61
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    on_multi_click:
+      - timing:
+          - ON for at most 1s
+          - OFF for at most 300ms
+          - ON for at most 1s
+          - OFF for at least 50ms
+        then:
+          - media_player.toggle: sendspin_group_media_player
+      - timing:
+          - ON for at most 1s
+          - OFF for at least 300ms
+        then:
+          - script.execute: reset_led
+          - if:
+              condition:
+                switch.is_on: timer_ringing
+              then:
+                - switch.turn_off: timer_ringing
+              else:
+                - if:
+                    condition:
+                      not:
+                        voice_assistant.is_running:
+                    then:
+                      - voice_assistant.start:
+                    else:
+                      - voice_assistant.stop:
+                      - script.execute:
+                          id: set_va_phase
+                          phase: ${va_phase_idle}
+
+  # Rooms clock
+  - platform: homeassistant
+    id: room1_presence
+    entity_id: ${sensor1_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+  - platform: homeassistant
+    id: room1_light
+    entity_id: ${light1_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+
+  - platform: homeassistant
+    id: room2_presence
+    entity_id: ${sensor2_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+  - platform: homeassistant
+    id: room2_light
+    entity_id: ${light2_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+
+  - platform: homeassistant
+    id: room3_presence
+    entity_id: ${sensor3_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+  - platform: homeassistant
+    id: room3_light
+    entity_id: ${light3_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+
+  - platform: homeassistant
+    id: room4_presence
+    entity_id: ${sensor4_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+  - platform: homeassistant
+    id: room4_light
+    entity_id: ${light4_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+
+  - platform: homeassistant
+    id: room5_presence
+    entity_id: ${sensor5_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+  - platform: homeassistant
+    id: room5_light
+    entity_id: ${light5_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+
+  - platform: homeassistant
+    id: room6_presence
+    entity_id: ${sensor6_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+  - platform: homeassistant
+    id: room6_light
+    entity_id: ${light6_entity}
+    on_state:
+      - script.execute: rooms_grid_apply
+
+i2c:
+  - id: i2c_codec
+    sda: GPIO51
+    scl: GPIO50
+
+i2s_audio:
+  - id: i2s_codec_bus
+    i2s_lrclk_pin: GPIO55
+    i2s_bclk_pin: GPIO53
+    i2s_mclk_pin: GPIO52
+    full_duplex: true  # Mic and speaker share the clocks, so both run at the same rate
+
+audio_dac:
+  - platform: es8311
+    id: es8311_codec
+    i2c_id: i2c_codec
+    bits_per_sample: 16bit
+    sample_rate: 48000
+    # use_microphone stays false: true selects a PDM digital mic, this board has an analog electret
+
+# ---------------------------------------------------------------------------
+# Audio: UAC 1.0 DAC/dongle on the USB 2.0 OTG (Type-A) port
+# usb_audio supports UAC 1.0 only; a UAC 2.0 device is rejected (and crashes usb_host_uac 1.5.0
+# if its descriptor fits the 1 KB control-transfer buffer)
+# ---------------------------------------------------------------------------
+
+usb_audio:
+  id: usb_audio_hub
+
+speaker:
+  # The dongle must support this exact format; on a mismatch the log lists the formats it does support.
+  # TEST 48 kHz: usb_host_uac picks the LAST alt setting that lists the rate; this card's 48 kHz-only alt 5
+  # played at double speed before. If it still does, set this and the two USB resamplers back to 44100.
+  - platform: usb_audio
+    id: usb_speaker
+    sample_rate: 48000
+    bits_per_sample: 16bit
+    num_channels: 2
+
+  # Onboard speaker (J9) via the ES8311 DAC; stereo in, the codec plays the left slot (as waveshare_3.5.yaml)
+  - platform: i2s_audio
+    id: onboard_speaker
+    i2s_audio_id: i2s_codec_bus
+    i2s_dout_pin: GPIO56  # I2S_DSDIN
+    dac_type: external
+    sample_rate: 48000  # Full duplex: must match the mic
+    bits_per_sample: 16bit
+    channel: stereo
+    # No audio_dac: volume is applied in software (-49..0 dB); the ES8311 stays at its fixed 0 dB.
+    # The codec's own volume register is in 0.5 dB steps, so a linear slider was near silent at 50% and +6.5 dB at 80%.
+    buffer_duration: 100ms
+
+  # One mixer per output, so music and replies can each go to either one; announcements duck the music
+  - platform: mixer
+    id: usb_mixer
+    output_speaker: usb_speaker
+    num_channels: 2
+    task_stack_in_psram: true
+    source_speakers:
+      - id: usb_announcement_input
+      - id: usb_media_input
+
+  - platform: mixer
+    id: onboard_mixer
+    output_speaker: onboard_speaker
+    num_channels: 2
+    task_stack_in_psram: true
+    source_speakers:
+      - id: onboard_announcement_input
+      - id: onboard_media_input
+
+  # The USB branches bring the audio to the dongle's rate (a pass-through at 48 kHz)
+  - platform: resampler
+    id: usb_announcement_resampler
+    output_speaker: usb_announcement_input
+    sample_rate: 48000
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: usb_media_resampler
+    output_speaker: usb_media_input
+    sample_rate: 48000
+    bits_per_sample: 16
+
+  # Bring every stream to 48 kHz, then on to the output picked by ${va_speaker} / ${music_speaker}.
+  # Voice is mono; the mixers turn it into stereo.
+  - platform: resampler
+    id: va_format_resampler
+    output_speaker: ${va_speaker}
+    sample_rate: 48000
+    bits_per_sample: 16
+
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: ${music_speaker}
+    sample_rate: 48000
+    bits_per_sample: 16
+
+microphone:
+  # The dongle's mic/line-in, streamed to Music Assistant; same exact-format rule as the speaker
+  - platform: usb_audio
+    id: usb_mic
+    sample_rate: 48000
+    bits_per_sample: 16bit
+    num_channels: 1
+
+  # Onboard electret mic via the ES8311 ADC
+  - platform: i2s_audio
+    id: onboard_mic
+    i2s_audio_id: i2s_codec_bus
+    i2s_din_pin: GPIO54  # I2S_ASDOUT
+    adc_type: external
+    sample_rate: 48000  # Full duplex: must match the speaker
+    bits_per_sample: 16bit
+
+  # Wake word and voice assistant need 16 kHz; ${va_microphone} picks which of these two they use
+  - platform: resampler
+    id: onboard_voice_mic
+    microphone:
+      microphone: onboard_mic
+      channels: [0]
+    sample_rate: 16000
+
+  - platform: resampler
+    id: usb_voice_mic
+    microphone:
+      microphone: usb_mic
+      channels: [0]
+    sample_rate: 16000
+
+sendspin:
+  id: sendspin_hub
+  # PSRAM stack skews time sync; keep internal
+  task_stack_in_psram: false
+  on_pairing_failed:
+    - logger.log:
+        format: "Sendspin pairing failed: %s"
+        args: ["reason.c_str()"]
+        level: WARN
+    - script.execute: hide_pairing_code
+  # The pairing code goes to the display, the log and the Sendspin Pairing Code entity
+  on_display_pairing_code:
+    - logger.log:
+        level: INFO
+        format: "Sendspin pairing code: %s"
+        args: [code.c_str()]
+    - script.execute:
+        id: show_pairing_code
+        code: !lambda 'return code;'
+  on_clear_pairing_code:
+    - script.execute: hide_pairing_code
+  on_pairing_succeeded:
+    - script.execute: hide_pairing_code
+
+image:
+  - platform: file
+    file: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/${imagemodel}/240x240/playing.png
+    id: fallback_playing_image
+    resize: 216x216
+    type: RGB565
+    dither: NONE
+
+  - platform: file
+    file: ${waiting_illustration_file}
+    id: va_waiting_image
+    resize: 240x240
+    type: RGB565
+    dither: NONE
+  - platform: file
+    file: ${listening_illustration_file}
+    id: va_listening_image
+    resize: 240x240
+    type: RGB565
+    dither: NONE
+  - platform: file
+    file: ${thinking_illustration_file}
+    id: va_thinking_image
+    resize: 240x240
+    type: RGB565
+    dither: NONE
+  - platform: file
+    file: ${replying_illustration_file}
+    id: va_replying_image
+    resize: 240x240
+    type: RGB565
+    dither: NONE
+  - platform: file
+    file: ${error_illustration_file}
+    id: va_error_image
+    resize: 240x240
+    type: RGB565
+    dither: NONE
+  - platform: file
+    file: ${timer_finished_illustration_file}
+    id: va_timer_finished_image
+    resize: 240x240
+    type: RGB565
+    dither: NONE
+  - platform: file
+    file: ${loading_illustration_file}
+    id: va_loading_image
+    resize: 240x240
+    type: RGB565
+    dither: NONE
+  # Small corner icon while muted
+  - platform: file
+    file: ${mute_illustration_file}
+    id: va_mute_image
+    resize: 40x40
+    type: RGB565
+    dither: NONE
+
+  # Album art from Music Assistant, cross-faded on track change
+  - platform: sendspin
+    id: album_slot
+    format: JPEG
+    type: RGB565
+    resize: 216x216
+    display_offset: 1s
+    current_image:
+      id: album_art
+    transition_image:
+      id: album_art_transition
+    on_image_display:
+      - lambda: |-
+          id(sendspin_album_art_valid) = true;
+      - if:
+          condition:
+            lambda: 'return id(last_album_art_valid);'
+          then:
+            - lvgl.image.update:
+                id: outgoing_art
+                src: album_art_transition
+          else:
+            - lvgl.image.update:
+                id: outgoing_art
+                src: fallback_playing_image
+      - lvgl.image.update:
+          id: incoming_art
+          src: album_art
+      - lvgl.animation.start: album_art_crossfade
+    on_image_clear:
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+      - lvgl.image.update:
+          id: incoming_art
+          src: fallback_playing_image
+      - lvgl.animation.start: album_art_crossfade
+    on_image_error:
+      - logger.log:
+          format: "Album art error"
+          level: WARN
+      - lambda: |-
+          id(sendspin_album_art_valid) = false;
+
+  # Family Photo clock; the URL is set from Home Assistant
+  - platform: online_image
+    id: family_photo_image
+    url: https://raw.githubusercontent.com/RealDeco/sendspin-guition/main/images/family_photo1.png
+    format: PNG
+    type: RGB565
+    resize: ${imagewidth}x${imageheight}
+    update_interval: never
+    on_download_finished:
+      - if:
+          condition:
+            lambda: 'return id(clock_style_mode) == ${clock_style_photo};'
+          then:
+            - lvgl.image.update:
+                id: photo_clock_image_widget
+                src: family_photo_image
+            - lvgl.widget.show: photo_clock_image_widget
+    on_error:
+      - logger.log:
+          format: "Family photo failed to load"
+          level: WARN
+
+  # Clock background, picked from Home Assistant
+  - platform: online_image
+    id: standby_background_image
+    url: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Other/240x240/clock.png
+    format: PNG
+    type: RGB565
+    resize: ${imagewidth}x${imageheight}
+    update_interval: never
+    on_download_finished:
+      - if:
+          condition:
+            switch.is_on: standby_background_enabled
+          then:
+            - lvgl.image.update:
+                id: standby_background_widget
+                src: standby_background_image
+            - lvgl.widget.show: standby_background_widget
+
+# Downloads for the online images
+http_request:
+
+audio_file:
+  - id: timer_finished_sound
+    file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/timer_finished.flac
+  - id: ready_sound
+    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${startup_sound_file}.flac
+  - id: wake_word_sound
+    file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/${wakeup_sound}.flac
+
+media_source:
+  - platform: audio_file
+    id: audio_file_announcement_source
+  - platform: audio_http
+    id: http_announcement_source
+  - platform: audio_http
+    id: http_media_source
+  - platform: sendspin
+    id: sendspin_source
+    static_delay_adjustable: true
+
+media_player:
+  - platform: sendspin
+    id: sendspin_group_media_player
+    name: "Sendspin Player"
+
+  - platform: speaker_source
+    id: usb_media_player
+    name: "Player"
+
+    announcement_pipeline:
+      speaker: va_format_resampler
+      format: FLAC     # Least CPU-intensive codec
+      num_channels: 1  # Voice is mono
+      sample_rate: 48000
+      sources:
+        - audio_file_announcement_source
+        - http_announcement_source
+
+    media_pipeline:
+      speaker: media_resampling_speaker
+      format: FLAC     # Least CPU-intensive codec
+      num_channels: 2
+      sample_rate: 48000
+      sources:
+        - http_media_source
+        - sendspin_source
+
+    on_announcement:
+      - script.stop: mp_idle_debounce
+      - mixer_speaker.apply_ducking:  # Lower music under announcements
+          id: usb_media_input
+          decibel_reduction: 20
+          duration: 0.0s
+      - mixer_speaker.apply_ducking:
+          id: onboard_media_input
+          decibel_reduction: 20
+          duration: 0.0s
+      # On device the wake word keeps running, so "stop" can be heard
+      - if:
+          condition:
+            and:
+              - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
+              - microphone.is_capturing: ${va_microphone}
+          then:
+            - script.execute: stop_wake_word
+            - wait_until:
+                - not:
+                    voice_assistant.is_running:
+
+    on_play:
+      - script.stop: mp_idle_debounce
+      - if:
+          condition:
+            and:
+              - microphone.is_capturing: ${va_microphone}
+              - switch.is_off: wake_word_during_music
+          then:
+            - script.execute: stop_wake_word
+            - if:
+                condition:
+                  - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
+                then:
+                  - wait_until:
+                      condition:
+                        - not:
+                            voice_assistant.is_running:
+      - lvgl.page.show: sendspin_page
+      - script.execute: music_led
+      - if:
+          condition:
+            lambda: 'return id(playing_internal_sound);'
+          then:
+            - lambda: 'id(playing_internal_sound) = false;'
+
+    on_idle:
+      - script.execute: mp_idle_debounce
+
+    # Only URL playback pauses (Sendspin goes idle instead); paused counts as idle for the wake word
+    on_pause:
+      - script.execute: mp_idle_debounce
+
+    on_state:
+      # Not during a voice session (e.g. after the wake sound): voice_assistant on_end brings the music back.
+      # id(va).is_running(), not the voice_assistant.is_running condition, which is also true while continuous
+      # mode ("In Home Assistant" wake word) is only armed.
+      - if:
+          condition:
+            and:
+              - not:
+                  media_player.is_announcing:
+                    id: usb_media_player
+              - lambda: return !id(va).is_running();
+          then:
+            - mixer_speaker.apply_ducking:  # Bring music back after announcements
+                id: usb_media_input
+                decibel_reduction: 0
+                duration: 1.0s
+            - mixer_speaker.apply_ducking:
+                id: onboard_media_input
+                decibel_reduction: 0
+                duration: 1.0s
+
+micro_wake_word:
+  id: mww
+  microphone: ${va_microphone}
+  stop_after_detection: false  # Keep listening during replies so "stop" can be heard
+  ring_buffer_duration: 800ms  # Per esphome#20942, ~25.6 KB; stops "Not enough free bytes in ring buffer"
+  models:
+    - okay_nabu
+    - hey_jarvis
+    # Only enabled while a TTS reply plays or a timer rings
+    - model: https://github.com/kahrendt/microWakeWord/releases/download/stop/stop.json
+      id: stop
+      internal: true
+  on_wake_word_detected:
+    - if:
+        condition:
+          switch.is_on: timer_ringing
+        then:
+          - switch.turn_off: timer_ringing
+        else:
+          - if:
+              condition:
+                voice_assistant.is_running:
+              then:
+                - voice_assistant.stop:
+                - script.execute:
+                    id: set_va_phase
+                    phase: ${va_phase_idle}
+              else:
+                - if:
+                    condition:
+                      media_player.is_announcing:
+                        id: usb_media_player
+                    then:
+                      - media_player.stop:
+                          announcement: true
+                          id: usb_media_player
+                    else:
+                      - if:
+                          condition:
+                            switch.is_on: wake_word_sound_switch
+                          then:
+                            - lambda: 'id(play_sound)->execute(false, std::string("wake_word_sound"));'
+                      - script.execute:
+                          id: set_va_phase
+                          phase: ${va_phase_waiting_for_command}
+                      - voice_assistant.start:
+                          wake_word: !lambda return wake_word;
+
+voice_assistant:
+  id: va
+  microphone: ${va_microphone}
+  media_player: usb_media_player
+  micro_wake_word: mww
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.0
+  on_start:
+    - mixer_speaker.apply_ducking:
+        id: usb_media_input
+        decibel_reduction: 20
+        duration: 0.0s
+    - mixer_speaker.apply_ducking:
+        id: onboard_media_input
+        decibel_reduction: 20
+        duration: 0.0s
+  on_wake_word_detected:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_waiting_for_command}
+  on_listening:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_waiting_for_command}
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: status_led
+              blue: 100%
+              red: 0%
+              green: 0%
+              effect: "Slow Pulse"
+  on_stt_vad_start:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_listening}
+  on_stt_vad_end:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_thinking}
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: status_led
+              blue: 100%
+              red: 0%
+              green: 0%
+              effect: "Fast Pulse"
+  on_tts_start:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_replying}
+    - script.execute: activate_stop_word_once
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: status_led
+              blue: 100%
+              red: 0%
+              green: 0%
+              brightness: 100%
+              effect: none
+
+  on_end:
+    # on_end fires when Home Assistant ends the pipeline, often before the reply starts playing. The VA itself
+    # stays out of IDLE until the player reports its reply finished; is_running() ignores continuous mode,
+    # unlike the voice_assistant.is_running condition.
+    - wait_until:
+        condition:
+          lambda: return !id(va).is_running();
+        timeout: 60s
+    - wait_until:
+        condition:
+          media_player.is_announcing:
+            id: usb_media_player
+        timeout: 0.5s
+    # The VA only goes idle after the reply finished, so this is just the tail; the timeout keeps a hung
+    # audio output from leaving the music ducked and the screen on "replying"
+    - wait_until:
+        condition:
+          and:
+            - not:
+                media_player.is_announcing:
+                  id: usb_media_player
+            - not:
+                speaker.is_playing:
+                  id: va_format_resampler
+        timeout: 10s
+    - mixer_speaker.apply_ducking:
+        id: usb_media_input
+        decibel_reduction: 0
+        duration: 1.0s
+    - mixer_speaker.apply_ducking:
+        id: onboard_media_input
+        decibel_reduction: 0
+        duration: 1.0s
+    # The reply has finished: hide the phase image (an error, ringing timer or lost connection keeps its own)
+    - if:
+        condition:
+          lambda: return id(va_phase) >= ${va_phase_waiting_for_command} && id(va_phase) <= ${va_phase_replying};
+        then:
+          - script.execute:
+              id: set_va_phase
+              phase: ${va_phase_idle}
+    # Don't rely on mp_idle_debounce: on the onboard speaker the player goes idle before the VA has ended.
+    # Music still playing goes back to its music light.
+    - if:
+        condition:
+          media_player.is_playing: usb_media_player
+        then:
+          - script.execute: music_led
+        else:
+          - script.execute: reset_led
+    # During music the wake word only comes back when "Wake word during music" is on
+    - if:
+        condition:
+          and:
+            - lambda: return id(wake_word_engine_location).current_option() == "On device";
+            - or:
+                - switch.is_on: wake_word_during_music
+                - not:
+                    media_player.is_playing: usb_media_player
+        then:
+          - lambda: id(va).set_use_wake_word(false);
+          - script.execute: start_wake_word
+
+  on_error:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_error}
+    - mixer_speaker.apply_ducking:
+        id: usb_media_input
+        decibel_reduction: 0
+        duration: 1.0s
+    - mixer_speaker.apply_ducking:
+        id: onboard_media_input
+        decibel_reduction: 0
+        duration: 1.0s
+    - if:
+        condition:
+          switch.is_off: mute
+        then:
+          - script.execute: start_wake_word
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: status_led
+              red: 100%
+              green: 0%
+              blue: 0%
+              brightness: 100%
+              effect: none
+    - delay: 2s
+    - script.execute: reset_led
+    - if:
+        condition:
+          lambda: return id(va_phase) == ${va_phase_error};
+        then:
+          - script.execute:
+              id: set_va_phase
+              phase: ${va_phase_idle}
+
+  on_client_connected:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_idle}
+    - script.execute: start_wake_word
+
+  on_client_disconnected:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_not_ready}
+    - script.execute: stop_wake_word
+
+  on_timer_finished:
+    - script.execute:
+        id: set_va_phase
+        phase: ${va_phase_timer_ringing}
+    - switch.turn_on: timer_ringing
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: status_led
+              red: 0%
+              green: 100%
+              blue: 0%
+              brightness: 100%
+              effect: "Fast Pulse"
+    - wait_until:
+        media_player.is_announcing:
+          id: usb_media_player
+    - if:
+        condition:
+          - switch.is_on: use_listen_light
+        then:
+          - light.turn_on:
+              id: status_led
+              blue: 0%
+              red: 100%
+              green: 0%
+              effect: "Fast Pulse"
+
+script:
+  # Voice assistant phase on the display: one full-screen image on the top layer, over whatever page is
+  # showing, hidden again when idle
+  - id: set_va_phase
+    parameters:
+      phase: int
+    then:
+      - lambda: |-
+          id(va_phase) = phase;
+          const char *name = "idle";
+          switch (phase) {
+            case ${va_phase_waiting_for_command}: name = "waiting_for_command"; break;
+            case ${va_phase_listening}: name = "listening"; break;
+            case ${va_phase_thinking}: name = "thinking"; break;
+            case ${va_phase_replying}: name = "replying"; break;
+            case ${va_phase_error}: name = "error"; break;
+            case ${va_phase_timer_ringing}: name = "timer_ringing"; break;
+            case ${va_phase_not_ready}: name = "not_ready"; break;
+          }
+          ESP_LOGI("va", "Phase: %s", name);
+      - if:
+          condition:
+            lambda: return id(display_ready);
+          then:
+            - if:
+                condition:
+                  lambda: return phase == ${va_phase_idle};
+                then:
+                  - lvgl.widget.hide: va_overlay
+                else:
+                  - lvgl.image.update:
+                      id: va_image
+                      src: !lambda |-
+                        switch (phase) {
+                          case ${va_phase_waiting_for_command}: return id(va_waiting_image);
+                          case ${va_phase_listening}: return id(va_listening_image);
+                          case ${va_phase_thinking}: return id(va_thinking_image);
+                          case ${va_phase_replying}: return id(va_replying_image);
+                          case ${va_phase_error}: return id(va_error_image);
+                          case ${va_phase_timer_ringing}: return id(va_timer_finished_image);
+                          default: return id(va_loading_image);
+                        }
+                  - lvgl.widget.show: va_overlay
+
+  - id: update_mute_icon
+    then:
+      - if:
+          condition:
+            lambda: return id(display_ready);
+          then:
+            - if:
+                condition:
+                  switch.is_on: mute
+                then:
+                  - lvgl.widget.show: va_mute_icon
+                else:
+                  - lvgl.widget.hide: va_mute_icon
+
+  # Pairing code overlay on top of whatever page is showing
+  - id: show_pairing_code
+    mode: restart
+    parameters:
+      code: string
+    then:
+      - script.stop: hide_pairing_code
+      - lambda: |-
+          if (id(pairing_overlay) == nullptr) {
+            id(pairing_overlay) = lv_obj_create(lv_layer_top());
+            lv_obj_remove_style_all(id(pairing_overlay));
+            lv_obj_set_size(id(pairing_overlay), 228, 106);
+            lv_obj_center(id(pairing_overlay));
+            lv_obj_set_style_bg_color(id(pairing_overlay), lv_color_hex(0x000000), 0);
+            lv_obj_set_style_bg_opa(id(pairing_overlay), 235, 0);
+            lv_obj_set_style_border_width(id(pairing_overlay), 3, 0);
+            lv_obj_set_style_border_color(id(pairing_overlay), lv_color_hex(0x66CCFF), 0);
+            lv_obj_set_style_radius(id(pairing_overlay), 18, 0);
+            lv_obj_clear_flag(id(pairing_overlay), LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_clear_flag(id(pairing_overlay), LV_OBJ_FLAG_SCROLLABLE);
+
+            lv_obj_t *title = lv_label_create(id(pairing_overlay));
+            lv_label_set_text(title, "Sendspin pairing");
+            lv_obj_set_style_text_font(title, id(font_display), 0);
+            lv_obj_set_style_text_color(title, lv_color_hex(0xB0B0B0), 0);
+            lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+            id(pairing_code_label) = lv_label_create(id(pairing_overlay));
+            lv_obj_set_style_text_font(id(pairing_code_label), id(font_7seg), 0);
+            lv_obj_set_style_text_color(id(pairing_code_label), lv_color_hex(0xFFFF00), 0);
+            lv_obj_align(id(pairing_code_label), LV_ALIGN_BOTTOM_MID, 0, -10);
+          }
+
+          std::string shown = code;
+          if (shown.size() == 6) shown.insert(3, " ");
+          lv_label_set_text(id(pairing_code_label), shown.c_str());
+          lv_obj_align(id(pairing_code_label), LV_ALIGN_BOTTOM_MID, 0, -10);
+          lv_anim_del(id(pairing_overlay), nullptr);
+          lv_obj_set_style_opa(id(pairing_overlay), LV_OPA_COVER, 0);
+          lv_obj_clear_flag(id(pairing_overlay), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_move_foreground(id(pairing_overlay));
+
+  - id: hide_pairing_code
+    mode: restart
+    then:
+      - lambda: |-
+          if (id(pairing_overlay) == nullptr || lv_obj_has_flag(id(pairing_overlay), LV_OBJ_FLAG_HIDDEN)) return;
+          lv_anim_del(id(pairing_overlay), nullptr);
+          lv_anim_t fade;
+          lv_anim_init(&fade);
+          lv_anim_set_var(&fade, id(pairing_overlay));
+          lv_anim_set_values(&fade, LV_OPA_COVER, LV_OPA_TRANSP);
+          lv_anim_set_time(&fade, 260);
+          lv_anim_set_exec_cb(&fade, [](void *obj, int32_t opacity) {
+            lv_obj_set_style_opa((lv_obj_t *) obj, opacity, 0);
+          });
+          lv_anim_start(&fade);
+      - delay: 280ms
+      - lambda: |-
+          if (id(pairing_overlay) != nullptr) {
+            lv_obj_add_flag(id(pairing_overlay), LV_OBJ_FLAG_HIDDEN);
+          }
+
+  # The onboard amp is powered when either output is the onboard speaker
+  - id: apply_outputs
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return std::string("${va_speaker}") == "onboard_announcement_input" ||
+                     std::string("${music_speaker}") == "onboard_media_input";
+          then:
+            - switch.turn_on: onboard_amp
+          else:
+            - switch.turn_off: onboard_amp
+
+  - id: mp_idle_debounce
+    mode: restart
+    then:
+      - delay: 1s
+      # Back to the clock page once the player has stayed idle/paused
+      - if:
+          condition:
+            or:
+              - media_player.is_idle: usb_media_player
+              - media_player.is_paused: usb_media_player
+          then:
+            - lvgl.page.show: idle_page
+      - if:
+          condition:
+            and:
+              - or:
+                  - media_player.is_idle: usb_media_player
+                  - media_player.is_paused: usb_media_player
+              - not:
+                  voice_assistant.is_running:
+          then:
+            - script.execute: reset_led
+            - script.execute: start_wake_word
+
+  # While music plays: green slow pulse, or the normal idle light when "Use music light" is off
+  - id: music_led
+    then:
+      - if:
+          condition:
+            switch.is_on: use_music_light
+          then:
+            - light.turn_on:
+                id: status_led
+                blue: 0%
+                red: 0%
+                green: 100%
+                effect: "Slow Pulse"
+          else:
+            - script.execute: reset_led
+
+  - id: reset_led
+    then:
+      - if:
+          condition:
+            - lambda: return id(wake_word_engine_location).current_option() == "On device";
+            - switch.is_on: use_listen_light
+          then:
+            - light.turn_on:
+                id: status_led
+                red: 100%
+                green: 89%
+                blue: 71%
+                brightness: 30%
+                effect: none
+          else:
+            - if:
+                condition:
+                  - lambda: return id(wake_word_engine_location).current_option() != "On device";
+                  - switch.is_on: use_listen_light
+                then:
+                  - light.turn_on:
+                      id: status_led
+                      red: 0%
+                      green: 100%
+                      blue: 100%
+                      brightness: 30%
+                      effect: none
+                else:
+                  - light.turn_off: status_led
+
+  - id: start_wake_word
+    then:
+      - if:
+          condition:
+            and:
+              - switch.is_off: mute
+              - not:
+                  - voice_assistant.is_running:
+              - not:
+                  - micro_wake_word.is_running:
+              - lambda: return id(wake_word_engine_location).current_option() == "On device";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - micro_wake_word.start:
+      - if:
+          condition:
+            and:
+              - switch.is_off: mute
+              - not:
+                  - voice_assistant.is_running:
+              - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(true);
+            - voice_assistant.start_continuous:
+
+  - id: stop_wake_word
+    then:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
+          then:
+            - lambda: id(va).set_use_wake_word(false);
+            - voice_assistant.stop:
+      - if:
+          condition:
+            lambda: return id(wake_word_engine_location).current_option() == "On device";
+          then:
+            - micro_wake_word.stop:
+
+  - id: activate_stop_word_once
+    mode: restart
+    then:
+      - wait_until:
+          condition:
+            media_player.is_announcing:
+              id: usb_media_player
+          timeout: 5s
+      - delay: 1s  # Skip the start of the reply
+      - if:
+          condition:
+            switch.is_off: timer_ringing
+          then:
+            - micro_wake_word.enable_model: stop
+      - wait_until:
+          not:
+            media_player.is_announcing:
+              id: usb_media_player
+      - if:
+          condition:
+            switch.is_off: timer_ringing
+          then:
+            - micro_wake_word.disable_model: stop
+
+  - id: ring_timer
+    then:
+      - script.execute: enable_repeat_one
+      - script.execute:
+          id: play_sound
+          priority: true
+          sound_file: "timer_finished_sound"
+
+  # Repeat the timer sound with a 500 ms gap while the timer rings
+  - id: enable_repeat_one
+    then:
+      - media_player.repeat_one:
+          id: usb_media_player
+          announcement: true
+      - speaker_source.set_playlist_delay:
+          id: usb_media_player
+          pipeline: announcement
+          delay: 500ms
+
+  # Back to normal once the timer is silenced
+  - id: disable_repeat
+    then:
+      - media_player.repeat_off:
+          id: usb_media_player
+          announcement: true
+      - speaker_source.set_playlist_delay:
+          id: usb_media_player
+          pipeline: announcement
+          delay: 0ms
+
+  - id: play_sound
+    parameters:
+      priority: bool
+      sound_file: string
+    then:
+      - if:
+          condition:
+            lambda: 'return sound_file == "ready_sound";'
+          then:
+            - lvgl.page.show: boot_sound_page
+      - lambda: |-
+          id(playing_internal_sound) = true;
+      - if:
+          condition:
+            lambda: return priority;
+          then:
+            - media_player.stop:
+                id: usb_media_player
+                announcement: true
+      - lambda: |-
+          if ( (id(usb_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING ) || priority) {
+            id(usb_media_player)
+              ->make_call()
+              .set_media_url("audio-file://" + sound_file)
+              .set_announcement(true)
+              .perform();
+          }
+
+  # Clock colours: the accent lights write the globals, then the labels are recoloured
+  - id: apply_accent_color_debounced
+    mode: restart
+    then:
+      - delay: 40ms
+      - if:
+          condition:
+            lambda: return id(display_ready);
+          then:
+            - script.execute: apply_accent_color
+
+  - id: apply_accent_color
+    mode: restart
+    then:
+      - lambda: |-
+          auto rgb = [](int r, int g, int b) {
+            r = std::max(0, std::min(255, r));
+            g = std::max(0, std::min(255, g));
+            b = std::max(0, std::min(255, b));
+            return lv_color_hex(((uint32_t) r << 16) | ((uint32_t) g << 8) | (uint32_t) b);
+          };
+          const lv_color_t accent = rgb(id(accent_red), id(accent_green), id(accent_blue));
+          const lv_color_t accent2 = rgb(id(accent2_red), id(accent2_green), id(accent2_blue));
+          const lv_color_t accent3 = rgb(id(accent3_red), id(accent3_green), id(accent3_blue));
+          const lv_color_t accent4 = rgb(id(accent4_red), id(accent4_green), id(accent4_blue));
+
+          lv_obj_set_style_text_color(id(clock_label), accent, 0);
+          lv_obj_set_style_text_color(id(clock_ampm_label), accent, 0);
+          lv_obj_set_style_text_color(id(photo_clock_label), accent, 0);
+          lv_obj_set_style_text_color(id(photo_ampm_label), accent, 0);
+          lv_obj_set_style_text_color(id(weather_big_temp), accent, 0);
+          lv_obj_set_style_text_color(id(weather_big_temp_unit), accent, 0);
+          lv_obj_set_style_text_color(id(analog_weather_temp), accent, 0);
+          lv_obj_set_style_text_color(id(date_label), accent2, 0);
+          lv_obj_set_style_text_color(id(photo_date_label), accent2, 0);
+          lv_obj_set_style_text_color(id(weather_icon), accent2, 0);
+          lv_obj_set_style_text_color(id(analog_weather_icon), accent2, 0);
+          lv_obj_set_style_text_color(id(weather_label), accent3, 0);
+          lv_obj_set_style_text_color(id(cyber_time_label), accent4, 0);
+          lv_obj_set_style_text_color(id(rooms_clock_label), accent3, 0);
+          lv_obj_set_style_text_color(id(rooms_date_label), accent2, 0);
+          for (auto *box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+            lv_obj_set_style_border_color(box, accent, 0);
+          }
+      - script.execute: analog_clock_redraw
+      - script.execute: rooms_grid_apply
+
+  # The clock canvas is declared on idle_page (a YAML canvas is what builds LVGL's canvas support in)
+  - id: analog_clock_ensure_created
+    then:
+      - lambda: |-
+          if (id(analog_clock_canvas_widget) != nullptr) return;
+          id(analog_clock_canvas_widget) = id(clock_canvas);
+
+  - id: apply_clock_style
+    mode: restart
+    parameters:
+      style_mode: int
+    then:
+      - lambda: |-
+          id(clock_style_mode) = style_mode;
+      - if:
+          condition:
+            lambda: 'return style_mode != ${clock_style_photo};'
+          then:
+            - lambda: |-
+                lv_obj_add_flag(id(photo_clock_block), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(id(photo_clock_image_widget), LV_OBJ_FLAG_HIDDEN);
+            - online_image.release: family_photo_image
+      - if:
+          condition:
+            lambda: 'return style_mode == ${clock_style_analog};'
+          then:
+            - script.execute: analog_clock_ensure_created
+            - lambda: |-
+                lv_obj_add_flag(id(clock_label), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(id(clock_ampm_label), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(id(date_label), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(id(weather_header), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(id(weather_label), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(id(analog_clock_canvas_widget), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(id(rooms_clock_label), LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                for (auto box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+                  lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
+                }
+                lv_obj_add_flag(id(cyber_time_label), LV_OBJ_FLAG_HIDDEN);
+            - script.execute: analog_clock_redraw
+            - component.update: clock_hms
+            - component.update: clock_date
+            - component.update: weather_temp_big
+            - component.update: weather_line
+          else:
+            - if:
+                condition:
+                  lambda: 'return style_mode == ${clock_style_rooms};'
+                then:
+                  - lambda: |-
+                      lv_obj_add_flag(id(clock_label), LV_OBJ_FLAG_HIDDEN);
+                      lv_obj_add_flag(id(clock_ampm_label), LV_OBJ_FLAG_HIDDEN);
+                      lv_obj_add_flag(id(date_label), LV_OBJ_FLAG_HIDDEN);
+                      lv_obj_add_flag(id(weather_header), LV_OBJ_FLAG_HIDDEN);
+                      lv_obj_add_flag(id(weather_label), LV_OBJ_FLAG_HIDDEN);
+                      lv_obj_add_flag(id(analog_weather_icon), LV_OBJ_FLAG_HIDDEN);
+                      lv_obj_add_flag(id(analog_weather_temp), LV_OBJ_FLAG_HIDDEN);
+                      if (id(analog_clock_canvas_widget) != nullptr) {
+                        lv_obj_add_flag(id(analog_clock_canvas_widget), LV_OBJ_FLAG_HIDDEN);
+                      }
+                      lv_obj_clear_flag(id(rooms_clock_label), LV_OBJ_FLAG_HIDDEN);
+                      if (id(clock_show_date).state) {
+                        lv_obj_clear_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                      } else {
+                        lv_obj_add_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                      }
+                      for (auto box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+                        lv_obj_clear_flag(box, LV_OBJ_FLAG_HIDDEN);
+                      }
+                      lv_obj_add_flag(id(cyber_time_label), LV_OBJ_FLAG_HIDDEN);
+                  - script.execute: rooms_grid_apply
+                  - component.update: clock_hms
+                  - component.update: clock_date
+                  - component.update: weather_temp_big
+                  - component.update: weather_line
+                else:
+                  - if:
+                      condition:
+                        lambda: 'return style_mode == ${clock_style_retro};'
+                      then:
+                        - script.execute: analog_clock_ensure_created
+                        - lambda: |-
+                            lv_obj_add_flag(id(clock_label), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(clock_ampm_label), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(date_label), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(weather_header), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(weather_label), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(analog_weather_icon), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(analog_weather_temp), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_clear_flag(id(analog_clock_canvas_widget), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(rooms_clock_label), LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                            for (auto box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+                              lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
+                            }
+                            lv_obj_add_flag(id(cyber_time_label), LV_OBJ_FLAG_HIDDEN);
+                        - script.execute: retro_clock_redraw
+                        - component.update: clock_hms
+                        - component.update: clock_date
+                        - component.update: weather_temp_big
+                        - component.update: weather_line
+                      else:
+                        - if:
+                            condition:
+                              lambda: 'return style_mode == ${clock_style_mario};'
+                            then:
+                              - script.execute: analog_clock_ensure_created
+                              - lambda: |-
+                                  lv_obj_add_flag(id(clock_label), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(clock_ampm_label), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(date_label), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(weather_header), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(weather_label), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(analog_weather_icon), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(analog_weather_temp), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_clear_flag(id(analog_clock_canvas_widget), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(rooms_clock_label), LV_OBJ_FLAG_HIDDEN);
+                                  lv_obj_add_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                                  for (auto box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+                                    lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
+                                  }
+                                  lv_obj_add_flag(id(cyber_time_label), LV_OBJ_FLAG_HIDDEN);
+                                  id(mario_anim_active) = false;
+                                  id(mario_y_offset) = 0;
+                                  id(hourblock_offset) = 0;
+                                  id(hourblock_bouncing) = false;
+                                  id(hourblock_going_up) = true;
+                                  id(minuteblock_offset) = 0;
+                                  id(minuteblock_bouncing) = false;
+                                  id(minuteblock_going_up) = true;
+                              - script.execute:
+                                  id: mario_draw_scene
+                                  full_redraw: true
+                              - component.update: clock_hms
+                              - component.update: clock_date
+                              - component.update: weather_temp_big
+                              - component.update: weather_line
+                            else:
+                              - if:
+                                  condition:
+                                    lambda: 'return style_mode == ${clock_style_photo};'
+                                  then:
+                                    - lambda: |-
+                                        lv_obj_add_flag(id(clock_label), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_add_flag(id(clock_ampm_label), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_add_flag(id(date_label), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_add_flag(id(weather_header), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_add_flag(id(weather_label), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_add_flag(id(analog_weather_icon), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_add_flag(id(analog_weather_temp), LV_OBJ_FLAG_HIDDEN);
+                                        if (id(analog_clock_canvas_widget) != nullptr) {
+                                          lv_obj_add_flag(id(analog_clock_canvas_widget), LV_OBJ_FLAG_HIDDEN);
+                                        }
+                                        lv_obj_add_flag(id(rooms_clock_label), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_add_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                                        for (auto box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+                                          lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
+                                        }
+                                        lv_obj_add_flag(id(cyber_time_label), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_clear_flag(id(photo_clock_block), LV_OBJ_FLAG_HIDDEN);
+                                        lv_obj_clear_flag(id(photo_clock_pill), LV_OBJ_FLAG_HIDDEN);
+                                        lv_label_set_text(id(photo_clock_label), id(clock_hms).state.c_str());
+                                        lv_label_set_text(id(photo_date_label), id(clock_date).state.c_str());
+                                    - script.execute: photo_pill_layout
+                                    - if:
+                                        condition:
+                                          lambda: 'return id(family_photo_image)->is_loaded();'
+                                        then:
+                                          - lvgl.image.update:
+                                              id: photo_clock_image_widget
+                                              src: family_photo_image
+                                          - lvgl.widget.show: photo_clock_image_widget
+                                        else:
+                                          - script.execute: load_family_photo
+                                    - component.update: clock_hms
+                                    - component.update: clock_date
+                                  else:
+                                    - if:
+                                        condition:
+                                          lambda: 'return style_mode == ${clock_style_cyber};'
+                                        then:
+                                          - lambda: |-
+                                              lv_obj_add_flag(id(idle_center_block), LV_OBJ_FLAG_HIDDEN);
+                                              if (id(analog_clock_canvas_widget) != nullptr) {
+                                                lv_obj_add_flag(id(analog_clock_canvas_widget), LV_OBJ_FLAG_HIDDEN);
+                                              }
+                                              lv_obj_add_flag(id(analog_weather_icon), LV_OBJ_FLAG_HIDDEN);
+                                              lv_obj_add_flag(id(analog_weather_temp), LV_OBJ_FLAG_HIDDEN);
+                                              lv_obj_add_flag(id(rooms_clock_label), LV_OBJ_FLAG_HIDDEN);
+                                              lv_obj_add_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                                              for (auto box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+                                                lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
+                                              }
+                                              lv_obj_clear_flag(id(cyber_time_label), LV_OBJ_FLAG_HIDDEN);
+                                          - component.update: clock_hms
+                                          - component.update: clock_date
+                                        else:
+                                          - lambda: |-
+                                              lv_obj_clear_flag(id(clock_label), LV_OBJ_FLAG_HIDDEN);
+                                              lv_obj_clear_flag(id(idle_center_block), LV_OBJ_FLAG_HIDDEN);
+                                              if (id(clock_show_date).state) {
+                                                lv_obj_clear_flag(id(date_label), LV_OBJ_FLAG_HIDDEN);
+                                              } else {
+                                                lv_obj_add_flag(id(date_label), LV_OBJ_FLAG_HIDDEN);
+                                              }
+                                              if (id(analog_clock_canvas_widget) != nullptr) {
+                                                lv_obj_add_flag(id(analog_clock_canvas_widget), LV_OBJ_FLAG_HIDDEN);
+                                              }
+                                              lv_obj_add_flag(id(analog_weather_icon), LV_OBJ_FLAG_HIDDEN);
+                                              lv_obj_add_flag(id(analog_weather_temp), LV_OBJ_FLAG_HIDDEN);
+                                              lv_obj_add_flag(id(rooms_clock_label), LV_OBJ_FLAG_HIDDEN);
+                                              lv_obj_add_flag(id(rooms_date_label), LV_OBJ_FLAG_HIDDEN);
+                                              for (auto box : {id(room1_box), id(room2_box), id(room3_box), id(room4_box), id(room5_box), id(room6_box)}) {
+                                                lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
+                                              }
+                                              lv_obj_add_flag(id(cyber_time_label), LV_OBJ_FLAG_HIDDEN);
+                                          - component.update: clock_hms
+                                          - component.update: clock_date
+                                          - component.update: weather_temp_big
+                                          - component.update: weather_line
+
+  - id: rooms_grid_apply
+    then:
+      - lambda: |-
+          auto apply_box = [&](lv_obj_t *box, lv_obj_t *icon, lv_color_t on_color, bool light_on, bool presence_on) {
+            if (light_on) {
+              lv_obj_set_style_bg_color(box, on_color, 0);
+              lv_obj_set_style_bg_opa(box, LV_OPA_70, 0);
+            } else {
+              lv_obj_set_style_bg_opa(box, LV_OPA_TRANSP, 0);
+            }
+            lv_obj_set_style_text_color(icon, lv_color_hex(0xFFFFFF), 0);
+            if (presence_on) {
+              lv_obj_clear_flag(icon, LV_OBJ_FLAG_HIDDEN);
+            } else {
+              lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+            }
+          };
+          apply_box(id(room1_box), id(room1_icon), lv_color_hex(0x4FC3F7), id(room1_light).state, id(room1_presence).state);
+          apply_box(id(room2_box), id(room2_icon), lv_color_hex(0xE53935), id(room2_light).state, id(room2_presence).state);
+          apply_box(id(room3_box), id(room3_icon), lv_color_hex(0xFDD835), id(room3_light).state, id(room3_presence).state);
+          apply_box(id(room4_box), id(room4_icon), lv_color_hex(0xBA68C8), id(room4_light).state, id(room4_presence).state);
+          apply_box(id(room5_box), id(room5_icon), lv_color_hex(0x1A237E), id(room5_light).state, id(room5_presence).state);
+          apply_box(id(room6_box), id(room6_icon), lv_color_hex(0x81C784), id(room6_light).state, id(room6_presence).state);
+
+  - id: analog_clock_redraw
+    mode: restart
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_analog};'
+              - lambda: 'return id(analog_clock_canvas_widget) != nullptr;'
+          then:
+            - lambda: |-
+                lv_obj_t *canvas = id(analog_clock_canvas_widget);
+                const int32_t SIZE = std::min(${screenwidth}, ${screenheight});
+                const int32_t CX = SIZE / 2;
+                const int32_t CY = SIZE / 2;
+                const int32_t R = SIZE / 2 - 10;
+
+                lv_canvas_fill_bg(canvas, lv_color_hex(0x000000), LV_OPA_TRANSP);
+
+                lv_layer_t layer;
+                lv_canvas_init_layer(canvas, &layer);
+
+                const uint32_t accent = ((uint32_t) id(accent_red) << 16) | ((uint32_t) id(accent_green) << 8) | (uint32_t) id(accent_blue);
+                const uint32_t accent2 = ((uint32_t) id(accent2_red) << 16) | ((uint32_t) id(accent2_green) << 8) | (uint32_t) id(accent2_blue);
+                const uint32_t accent3 = ((uint32_t) id(accent3_red) << 16) | ((uint32_t) id(accent3_green) << 8) | (uint32_t) id(accent3_blue);
+                lv_color_t fg = lv_color_hex(accent);
+                lv_color_t fg2 = lv_color_hex(accent2);
+                lv_color_t fg3 = lv_color_hex(accent3);
+                const bool show_seconds = id(clock_show_seconds).state;
+
+                lv_draw_line_dsc_t line_dsc;
+                lv_draw_line_dsc_init(&line_dsc);
+                line_dsc.round_start = true;
+                line_dsc.round_end = true;
+
+                if (id(clock_show_gfx).state) {
+                  for (int i = 0; i < 60; i++) {
+                    float a = (i / 60.0f) * 6.2831853f - 1.5707963f;
+                    bool major = (i % 5 == 0);
+                    int32_t r_out = R;
+                    int32_t r_in = major ? R - 16 : R - 8;
+                    line_dsc.p1.x = CX + (int32_t) (cosf(a) * r_out);
+                    line_dsc.p1.y = CY + (int32_t) (sinf(a) * r_out);
+                    line_dsc.p2.x = CX + (int32_t) (cosf(a) * r_in);
+                    line_dsc.p2.y = CY + (int32_t) (sinf(a) * r_in);
+                    line_dsc.color = major ? fg : fg2;
+                    line_dsc.width = major ? 3 : 1;
+                    lv_draw_line(&layer, &line_dsc);
+                  }
+                }
+
+                if (id(clock_show_date).state) {
+                  std::string date_str = id(clock_date).state;
+                  lv_draw_label_dsc_t label_dsc;
+                  lv_draw_label_dsc_init(&label_dsc);
+                  label_dsc.color = fg2;
+                  label_dsc.font = id(font_date)->get_lv_font();
+                  label_dsc.align = LV_TEXT_ALIGN_CENTER;
+                  label_dsc.text = date_str.c_str();
+                  label_dsc.text_local = true;
+                  const int32_t date_y = CY + (int32_t) (R * 0.55f);
+                  lv_area_t label_area = {CX - R, date_y, CX + R, date_y + 40};
+                  lv_draw_label(&layer, &label_dsc, &label_area);
+                }
+
+                auto t = id(homeassistant_time).now();
+                int hh = t.is_valid() ? (t.hour % 12) : 0;
+                int mm = t.is_valid() ? t.minute : 0;
+                int ss = t.is_valid() ? t.second : 0;
+
+                float s_pos = ss / 60.0f;
+                float m_pos = (mm + s_pos) / 60.0f;
+                float h_pos = (hh + m_pos) / 12.0f;
+
+                auto draw_hand = [&](float pos, int32_t len, int32_t width, lv_color_t color) {
+                  float a = pos * 6.2831853f - 1.5707963f;
+                  line_dsc.p1.x = CX;
+                  line_dsc.p1.y = CY;
+                  line_dsc.p2.x = CX + (int32_t) (cosf(a) * len);
+                  line_dsc.p2.y = CY + (int32_t) (sinf(a) * len);
+                  line_dsc.color = color;
+                  line_dsc.width = width;
+                  lv_draw_line(&layer, &line_dsc);
+                };
+
+                draw_hand(h_pos, (int32_t) (R * 0.5f), 6, fg3);
+                draw_hand(m_pos, (int32_t) (R * 0.72f), 4, fg3);
+                if (show_seconds) {
+                  draw_hand(s_pos, (int32_t) (R * 0.85f), 1, fg);
+                }
+
+                lv_draw_rect_dsc_t dot_dsc;
+                lv_draw_rect_dsc_init(&dot_dsc);
+                dot_dsc.bg_color = fg;
+                dot_dsc.bg_opa = LV_OPA_COVER;
+                dot_dsc.radius = LV_RADIUS_CIRCLE;
+                lv_area_t dot_area = {CX - 6, CY - 6, CX + 6, CY + 6};
+                lv_draw_rect(&layer, &dot_dsc, &dot_area);
+
+                lv_canvas_finish_layer(canvas, &layer);
+                lv_obj_invalidate(canvas);
+
+  - id: retro_clock_redraw
+    mode: restart
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_retro};'
+              - lambda: 'return id(analog_clock_canvas_widget) != nullptr;'
+          then:
+            - lambda: |-
+                lv_obj_t *canvas = id(analog_clock_canvas_widget);
+                const int32_t SIZE = std::min(${screenwidth}, ${screenheight});
+                const int32_t CX = SIZE / 2;
+                const int32_t CY = SIZE / 2;
+                const float scale = SIZE / 240.0f;
+                auto S = [&](float v) -> int32_t { return (int32_t) roundf(v * scale); };
+
+                const lv_color_t c_matte = lv_color_hex(0x080808);
+                const lv_color_t c_matte_dark = lv_color_hex(0x333333);
+                const lv_color_t c_charcoal = lv_color_hex(0x181818);
+                const lv_color_t c_white = lv_color_hex(0xFFFFFF);
+                const lv_color_t c_soft_white = lv_color_hex(0xD6D3D6);
+                const lv_color_t c_dim_white = lv_color_hex(0x7B7D7B);
+                const lv_color_t c_shadow = lv_color_hex(0x000000);
+                const lv_color_t c_orange = lv_color_hex(0xFFA600);
+                const lv_color_t c_orange_dark = lv_color_hex(0xB56100);
+                const lv_color_t c_ring_inner = lv_color_hex(0x101010);
+                const lv_color_t c_tick_minor = lv_color_hex(0x525152);
+
+                lv_draw_buf_t *canvas_buf = lv_canvas_get_draw_buf(canvas);
+
+                // The bezel/rings/tick-marks/numerals/caption never change - redrawing
+                // all ~75 of those shapes every second (on top of the moving hands) was
+                // cheap enough on the 360x360 reference device but expensive enough on
+                // this larger canvas to intermittently starve the touchscreen driver's
+                // own timing and make touch stop registering. Draw the static face once,
+                // cache a raw snapshot of the canvas buffer, and on every later call just
+                // memcpy it back (near-instant) before drawing only the moving parts.
+                if (id(retro_static_buf) == nullptr) {
+                  lv_canvas_fill_bg(canvas, lv_color_hex(0x000000), LV_OPA_COVER);
+
+                  lv_layer_t static_layer;
+                  lv_canvas_init_layer(canvas, &static_layer);
+
+                  auto fill_circle_at = [&](int32_t cx, int32_t cy, int32_t r, lv_color_t color) {
+                    lv_draw_rect_dsc_t dsc;
+                    lv_draw_rect_dsc_init(&dsc);
+                    dsc.bg_color = color;
+                    dsc.bg_opa = LV_OPA_COVER;
+                    dsc.border_opa = LV_OPA_TRANSP;
+                    dsc.radius = LV_RADIUS_CIRCLE;
+                    lv_area_t area = {cx - r, cy - r, cx + r, cy + r};
+                    lv_draw_rect(&static_layer, &dsc, &area);
+                  };
+                  auto fill_circle = [&](int32_t r, lv_color_t color) {
+                    fill_circle_at(CX, CY, r, color);
+                  };
+                  auto stroke_circle = [&](int32_t r, lv_color_t color, int32_t width) {
+                    lv_draw_rect_dsc_t dsc;
+                    lv_draw_rect_dsc_init(&dsc);
+                    dsc.bg_opa = LV_OPA_TRANSP;
+                    dsc.border_color = color;
+                    dsc.border_width = width;
+                    dsc.border_opa = LV_OPA_COVER;
+                    dsc.radius = LV_RADIUS_CIRCLE;
+                    lv_area_t area = {CX - r, CY - r, CX + r, CY + r};
+                    lv_draw_rect(&static_layer, &dsc, &area);
+                  };
+
+                  fill_circle(S(118.0f), c_matte_dark);
+                  fill_circle(S(111.0f), c_matte);
+
+                  for (int r = 110; r >= 72; r -= 8) {
+                    stroke_circle(S((float) r), (r == 110) ? c_charcoal : c_ring_inner, 1);
+                  }
+                  stroke_circle(S(117.0f), c_dim_white, 1);
+                  stroke_circle(S(116.0f), c_charcoal, 1);
+                  stroke_circle(S(105.0f), c_charcoal, 1);
+
+                  lv_draw_line_dsc_t static_line_dsc;
+                  lv_draw_line_dsc_init(&static_line_dsc);
+                  static_line_dsc.round_start = true;
+                  static_line_dsc.round_end = true;
+
+                  for (int i = 0; i < 60; i++) {
+                    float a = (i / 60.0f) * 6.2831853f - 1.5707963f;
+                    bool major = (i % 5 == 0);
+                    int32_t r_out = S(major ? 107.0f : 104.0f);
+                    int32_t r_in = S(major ? 91.0f : 99.0f);
+                    static_line_dsc.p1.x = CX + (int32_t) (cosf(a) * r_out);
+                    static_line_dsc.p1.y = CY + (int32_t) (sinf(a) * r_out);
+                    static_line_dsc.p2.x = CX + (int32_t) (cosf(a) * r_in);
+                    static_line_dsc.p2.y = CY + (int32_t) (sinf(a) * r_in);
+                    static_line_dsc.color = major ? c_soft_white : c_tick_minor;
+                    static_line_dsc.width = major ? 2 : 1;
+                    lv_draw_line(&static_layer, &static_line_dsc);
+                  }
+
+                  lv_draw_label_dsc_t numeral_dsc;
+                  lv_draw_label_dsc_init(&numeral_dsc);
+                  numeral_dsc.color = c_soft_white;
+                  numeral_dsc.font = id(font_retro_numeral)->get_lv_font();
+                  numeral_dsc.align = LV_TEXT_ALIGN_CENTER;
+                  numeral_dsc.text_local = true;
+
+                  auto draw_numeral = [&](const char *text, int32_t x, int32_t y) {
+                    numeral_dsc.text = text;
+                    lv_area_t area = {x - S(30.0f), y - S(14.0f), x + S(30.0f), y + S(14.0f)};
+                    lv_draw_label(&static_layer, &numeral_dsc, &area);
+                  };
+
+                  draw_numeral("12", CX, CY - S(78.0f));
+                  draw_numeral("3", CX + S(78.0f), CY);
+                  draw_numeral("6", CX, CY + S(78.0f));
+                  draw_numeral("9", CX - S(78.0f), CY);
+
+                  lv_draw_label_dsc_t caption_dsc;
+                  lv_draw_label_dsc_init(&caption_dsc);
+                  caption_dsc.color = c_dim_white;
+                  caption_dsc.font = id(font_retro_small)->get_lv_font();
+                  caption_dsc.align = LV_TEXT_ALIGN_CENTER;
+                  caption_dsc.text = "RETRO";
+                  caption_dsc.text_local = true;
+                  int32_t caption_y = CY - S(34.0f);
+                  lv_area_t caption_area = {CX - S(50.0f), caption_y - S(10.0f), CX + S(50.0f), caption_y + S(10.0f)};
+                  lv_draw_label(&static_layer, &caption_dsc, &caption_area);
+
+                  lv_canvas_finish_layer(canvas, &static_layer);
+
+                  uint8_t *snapshot = (uint8_t *) malloc(canvas_buf->data_size);
+                  if (snapshot != nullptr) {
+                    memcpy(snapshot, canvas_buf->data, canvas_buf->data_size);
+                    id(retro_static_buf) = snapshot;
+                  }
+                } else {
+                  memcpy(canvas_buf->data, id(retro_static_buf), canvas_buf->data_size);
+                }
+
+                lv_layer_t layer;
+                lv_canvas_init_layer(canvas, &layer);
+
+                lv_draw_line_dsc_t line_dsc;
+                lv_draw_line_dsc_init(&line_dsc);
+                line_dsc.round_start = true;
+                line_dsc.round_end = true;
+
+                auto t = id(homeassistant_time).now();
+                int hh24 = t.is_valid() ? t.hour : 0;
+                int hh = hh24 % 12;
+                int mm = t.is_valid() ? t.minute : 0;
+                int ss = t.is_valid() ? t.second : 0;
+
+                float s_pos = ss / 60.0f;
+                float m_pos = (mm + s_pos) / 60.0f;
+                float h_pos = (hh + m_pos) / 12.0f;
+
+                auto draw_hand = [&](float pos, int32_t len, int32_t width, lv_color_t color, bool shadow) {
+                  float a = pos * 6.2831853f - 1.5707963f;
+                  int32_t ex = CX + (int32_t) (cosf(a) * len);
+                  int32_t ey = CY + (int32_t) (sinf(a) * len);
+                  if (shadow) {
+                    line_dsc.p1.x = CX + S(3.0f);
+                    line_dsc.p1.y = CY + S(3.0f);
+                    line_dsc.p2.x = ex + S(3.0f);
+                    line_dsc.p2.y = ey + S(3.0f);
+                    line_dsc.color = c_shadow;
+                    line_dsc.width = width;
+                    lv_draw_line(&layer, &line_dsc);
+                  }
+                  line_dsc.p1.x = CX;
+                  line_dsc.p1.y = CY;
+                  line_dsc.p2.x = ex;
+                  line_dsc.p2.y = ey;
+                  line_dsc.color = color;
+                  line_dsc.width = width;
+                  lv_draw_line(&layer, &line_dsc);
+                };
+
+                draw_hand(h_pos, S(53.0f), S(5.0f), c_white, true);
+                draw_hand(m_pos, S(76.0f), S(3.0f), c_soft_white, true);
+
+                if (id(clock_show_seconds).state) {
+                  draw_hand(s_pos, S(92.0f), S(1.0f), c_orange, true);
+
+                  float tail_pos = s_pos + 0.5f;
+                  if (tail_pos >= 1.0f) tail_pos -= 1.0f;
+                  draw_hand(tail_pos, S(18.0f), 1, c_orange_dark, false);
+                }
+
+                auto fill_circle_dyn = [&](int32_t cx, int32_t cy, int32_t r, lv_color_t color) {
+                  lv_draw_rect_dsc_t dsc;
+                  lv_draw_rect_dsc_init(&dsc);
+                  dsc.bg_color = color;
+                  dsc.bg_opa = LV_OPA_COVER;
+                  dsc.border_opa = LV_OPA_TRANSP;
+                  dsc.radius = LV_RADIUS_CIRCLE;
+                  lv_area_t area = {cx - r, cy - r, cx + r, cy + r};
+                  lv_draw_rect(&layer, &dsc, &area);
+                };
+                auto stroke_circle_dyn = [&](int32_t r, lv_color_t color, int32_t width) {
+                  lv_draw_rect_dsc_t dsc;
+                  lv_draw_rect_dsc_init(&dsc);
+                  dsc.bg_opa = LV_OPA_TRANSP;
+                  dsc.border_color = color;
+                  dsc.border_width = width;
+                  dsc.border_opa = LV_OPA_COVER;
+                  dsc.radius = LV_RADIUS_CIRCLE;
+                  lv_area_t area = {CX - r, CY - r, CX + r, CY + r};
+                  lv_draw_rect(&layer, &dsc, &area);
+                };
+
+                fill_circle_dyn(CX + S(3.0f), CY + S(3.0f), S(7.0f), c_shadow);
+                fill_circle_dyn(CX, CY, S(7.0f), c_matte_dark);
+                stroke_circle_dyn(S(7.0f), c_soft_white, 1);
+                fill_circle_dyn(CX, CY, S(3.0f), c_orange);
+
+                lv_draw_label_dsc_t digital_dsc;
+                lv_draw_label_dsc_init(&digital_dsc);
+                digital_dsc.color = c_dim_white;
+                digital_dsc.font = id(font_retro_small)->get_lv_font();
+                digital_dsc.align = LV_TEXT_ALIGN_CENTER;
+                digital_dsc.text_local = true;
+                int display_hour = hh24;
+                if (id(clock_12h_format).state) {
+                  display_hour = hh24 % 12;
+                  if (display_hour == 0) display_hour = 12;
+                }
+                char time_buf[8];
+                snprintf(time_buf, sizeof(time_buf), "%02d:%02d", display_hour, mm);
+                digital_dsc.text = time_buf;
+                int32_t digital_y = CY + S(46.0f);
+                lv_area_t digital_area = {CX - S(50.0f), digital_y - S(10.0f), CX + S(50.0f), digital_y + S(10.0f)};
+                lv_draw_label(&layer, &digital_dsc, &digital_area);
+
+                lv_canvas_finish_layer(canvas, &layer);
+                lv_obj_invalidate(canvas);
+
+
+  - id: mario_draw_scene
+    mode: restart
+    parameters:
+      full_redraw: bool
+    then:
+      - if:
+          condition:
+            and:
+              - lambda: 'return id(clock_style_mode) == ${clock_style_mario};'
+              - lambda: 'return id(analog_clock_canvas_widget) != nullptr;'
+              - or:
+                  # A full_redraw is a deliberate one-time "prepare this style now" paint (called
+                  # when entering Mario style) and must happen even if idle_page isn't the currently
+                  # shown page yet (e.g. boot_sound_page is still showing during startup) - otherwise
+                  # the canvas is left with whatever garbage was in its freshly-allocated buffer until
+                  # something else happens to trigger a redraw. Animation-frame calls (full_redraw:
+                  # false) keep the visibility check, since there's no point animating unseen content.
+                  - lambda: 'return full_redraw;'
+                  - lvgl.page.is_showing: idle_page
+          then:
+            - lambda: |-
+                lv_obj_t *canvas = id(analog_clock_canvas_widget);
+                lv_display_t *mario_disp = lv_obj_get_display(canvas);
+                lv_display_enable_invalidation(mario_disp, false);
+                const int32_t SIZE = std::min(${screenwidth}, ${screenheight});
+                // Fills the entire canvas (not just an inset square) - on a round display this means
+                // decorative corners (hill tip, cloud, far ground-row ends) may clip against the bezel;
+                // the core gameplay area (Mario, both blocks) stays well within the visible circle.
+                const float SCALE = (float) SIZE / 64.0f;
+                const int32_t OFFSET_X = (SIZE - (int32_t) roundf(64.0f * SCALE)) / 2;
+                const int32_t OFFSET_Y = (SIZE - (int32_t) roundf(64.0f * SCALE)) / 2;
+
+                static const uint16_t MASK_COLOR = 0x000E;
+
+                static const uint16_t BLOCK_SPRITE[361] = {
+                  0x000E, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40, 0x9A40,
+                  0x9A40, 0x9A40, 0x000E, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0x0000, 0x0000, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x0000, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0x0000, 0x0000, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x0000, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0x0000,
+                  0x0000, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x0000, 0xE4E4, 0x0000,
+                  0x9A40, 0xE4E4, 0x0000, 0x0000, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000,
+                  0x0000, 0xE4E4, 0x0000, 0x9A40, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4,
+                  0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0xE4E4, 0x0000, 0x000E, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
+                };
+
+                static const uint16_t BUSH_SPRITE[189] = {
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xBFE3, 0xBFE3, 0x0000,
+                  0x000E, 0x0000, 0x000E, 0x000E, 0x000E, 0x0000, 0xBFE3, 0xBFE3, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x0000, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0x0000, 0xBFE3, 0x0000, 0x000E, 0x0000, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0x0000, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xBFE3, 0xBFE3, 0xBFE3, 0x0560, 0xBFE3, 0xBFE3, 0x0000, 0x000E, 0x0000, 0xBFE3,
+                  0xBFE3, 0xBFE3, 0x0560, 0xBFE3, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xBFE3, 0x0560, 0x0560, 0xBFE3, 0xBFE3, 0x0560,
+                  0xBFE3, 0xBFE3, 0x0000, 0xBFE3, 0x0560, 0x0560, 0xBFE3, 0xBFE3, 0x0560, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0xBFE3, 0x0560,
+                  0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0x0560, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0x000E, 0x000E,
+                  0x0000, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3,
+                  0xBFE3, 0xBFE3, 0xBFE3, 0x000E, 0x000E, 0x0000, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3,
+                  0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0x000E, 0x0000, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3,
+                  0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3, 0xBFE3
+                };
+
+                static const uint16_t CLOUD1_SPRITE[156] = {
+                  0x000E, 0x0000, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xFFFF, 0xFFFF,
+                  0xFFFF, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+                  0x0000, 0x000E, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0xFFFF, 0x3DFF, 0xFFFF, 0xFFFF, 0x3DFF, 0xFFFF, 0xFFFF, 0x0000, 0xFFFF,
+                  0x0000, 0x000E, 0x000E, 0x000E, 0x3DFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x000E,
+                  0x000E, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x000E, 0xFFFF, 0xFFFF,
+                  0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x000E, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+                  0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x000E, 0x000E, 0xFFFF, 0xFFFF, 0xFFFF, 0x3DFF, 0x3DFF, 0xFFFF, 0x3DFF, 0xFFFF,
+                  0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x000E, 0x3DFF, 0x3DFF, 0x3DFF, 0xFFFF, 0xFFFF, 0x3DFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000,
+                  0x000E, 0x000E, 0xFFFF, 0xFFFF, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000,
+                  0x0000, 0x000E, 0x0000, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E
+                };
+
+                static const uint16_t CLOUD2_SPRITE[156] = {
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xFFFF, 0x3DFF, 0xFFFF,
+                  0xFFFF, 0x3DFF, 0xFFFF, 0xFFFF, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0xFFFF, 0x3DFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+                  0xFFFF, 0x000E, 0x000E, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x000E, 0x0000,
+                  0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x000E, 0xFFFF, 0xFFFF, 0xFFFF, 0x3DFF,
+                  0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x000E, 0x000E, 0x0000, 0xFFFF, 0xFFFF, 0x3DFF, 0xFFFF, 0xFFFF,
+                  0xFFFF, 0x3DFF, 0x3DFF, 0xFFFF, 0x3DFF, 0x000E, 0x000E, 0x000E, 0x0000, 0xFFFF, 0xFFFF, 0x3DFF, 0x3DFF, 0x3DFF, 0xFFFF, 0xFFFF,
+                  0x3DFF, 0xFFFF, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0xFFFF, 0xFFFF, 0x0000, 0xFFFF, 0xFFFF, 0xFFFF, 0x0000, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0x000E, 0x0000, 0x0000, 0x0000, 0x000E
+                };
+
+                static const uint16_t GROUND_SPRITE[64] = {
+                  0xE2C2, 0xF6B6, 0xF6B6, 0xF6B6, 0x0000, 0xE2C2, 0xF6B6, 0xE2C2, 0xF6B6, 0xE2C2, 0xE2C2, 0xE2C2, 0x0000, 0xF6B6, 0xE2C2, 0x0000,
+                  0xF6B6, 0xE2C2, 0xE2C2, 0xE2C2, 0x0000, 0xE2C2, 0x0000, 0xE2C2, 0x0000, 0xE2C2, 0xE2C2, 0xE2C2, 0x0000, 0xF6B6, 0xF6B6, 0x0000,
+                  0xF6B6, 0x0000, 0x0000, 0xE2C2, 0x0000, 0xF6B6, 0xE2C2, 0x0000, 0xF6B6, 0xF6B6, 0xF6B6, 0x0000, 0xF6B6, 0xE2C2, 0xE2C2, 0x0000,
+                  0xF6B6, 0xE2C2, 0xE2C2, 0xF6B6, 0xE2C2, 0xE2C2, 0xE2C2, 0x0000, 0xE2C2, 0x0000, 0x0000, 0xF6B6, 0x0000, 0x0000, 0x0000, 0xE2C2
+                };
+
+                static const uint16_t HILL_SPRITE[440] = {
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0000, 0x0560,
+                  0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x0560, 0x0560, 0x0000, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0560, 0x0000, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0000, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E,
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x0560, 0x0000, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0000, 0x000E, 0x000E,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0000, 0x000E, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560,
+                  0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560, 0x0560
+                };
+
+                static const uint16_t MARIO_IDLE_SPRITE[208] = {
+                  0x000E, 0x000E, 0x000E, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0xF801,
+                  0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0x0000, 0xfd28,
+                  0xfd28, 0x0000, 0xfd28, 0xfd28, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xfd28, 0x0000, 0xfd28, 0xfd28, 0xfd28, 0x0000, 0xfd28,
+                  0xfd28, 0xfd28, 0xfd28, 0x000E, 0x000E, 0x0000, 0xfd28, 0x0000, 0x0000, 0xfd28, 0xfd28, 0xfd28, 0x0000, 0xfd28, 0xfd28, 0xfd28,
+                  0xfd28, 0x000E, 0x0000, 0x0000, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x000E, 0x000E, 0x000E,
+                  0x000E, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0x000E, 0x000E, 0x000E, 0x000E, 0x7BCF, 0x7BCF, 0xF801,
+                  0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x7BCF, 0x7BCF, 0x7BCF, 0xF801, 0x7BCF, 0x7BCF, 0xF801,
+                  0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0x000E, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0xF801, 0xF801, 0xF801, 0xF801, 0x7BCF, 0x7BCF, 0x7BCF,
+                  0x7BCF, 0x7BCF, 0xfd28, 0xfd28, 0x7BCF, 0xF801, 0xfd28, 0xF801, 0xF801, 0xfd28, 0xF801, 0x7BCF, 0xfd28, 0xfd28, 0xfd28, 0xfd28,
+                  0xfd28, 0xfd28, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xF801, 0xF801,
+                  0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xfd28, 0xfd28, 0xfd28, 0x000E, 0x000E, 0xF801, 0xF801, 0xF801, 0xF801, 0x000E,
+                  0xF801, 0xF801, 0xF801, 0xF801, 0x000E, 0x000E, 0x000E, 0xC300, 0xC300, 0xC300, 0xC300, 0x000E, 0x000E, 0x000E, 0xC300, 0xC300,
+                  0xC300, 0xC300, 0x000E, 0xC300, 0xC300, 0xC300, 0xC300, 0xC300, 0x000E, 0x000E, 0x000E, 0xC300, 0xC300, 0xC300, 0xC300, 0xC300
+                };
+
+                static const uint16_t MARIO_JUMP_SPRITE[272] = {
+                  0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0xfd28, 0xfd28, 0xfd28,
+                  0xfd28, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0x000E, 0xfd28, 0xfd28,
+                  0xfd28, 0xfd28, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801,
+                  0xfd28, 0xfd28, 0xfd28, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0x0000, 0xfd28, 0xfd28, 0x0000, 0xfd28, 0xfd28,
+                  0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xfd28, 0x0000, 0xfd28, 0xfd28, 0xfd28, 0x0000, 0xfd28,
+                  0xfd28, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0xfd28, 0x0000, 0x0000, 0xfd28, 0xfd28, 0xfd28,
+                  0x0000, 0xfd28, 0xfd28, 0xfd28, 0x7BCF, 0x7BCF, 0x000E, 0x000E, 0x000E, 0x000E, 0x0000, 0x0000, 0xfd28, 0xfd28, 0xfd28, 0xfd28,
+                  0x0000, 0x0000, 0x0000, 0x0000, 0x7BCF, 0x7BCF, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0xfd28, 0xfd28, 0xfd28,
+                  0xfd28, 0xfd28, 0xfd28, 0xfd28, 0x7BCF, 0x7BCF, 0x000E, 0x000E, 0x000E, 0x000E, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0xF801,
+                  0x7BCF, 0x7BCF, 0x7BCF, 0xF801, 0x7BCF, 0x7BCF, 0x000E, 0x000E, 0x000E, 0x000E, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF,
+                  0x7BCF, 0xF801, 0x7BCF, 0x7BCF, 0x7BCF, 0xF801, 0xF801, 0x000E, 0xC300, 0xC300, 0xfd28, 0xfd28, 0x7BCF, 0x7BCF, 0x7BCF, 0x7BCF,
+                  0x7BCF, 0x7BCF, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0x000E, 0xC300, 0xC300, 0xfd28, 0xfd28, 0xfd28, 0xfd28, 0xF801,
+                  0xF801, 0x7BCF, 0xF801, 0xF801, 0xfd28, 0xF801, 0xF801, 0xfd28, 0xF801, 0xC300, 0xC300, 0xC300, 0x000E, 0xfd28, 0xfd28, 0xC300,
+                  0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xC300, 0xC300, 0xC300, 0x000E, 0x000E, 0xC300,
+                  0xC300, 0xC300, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xC300, 0xC300, 0xC300, 0x000E, 0xC300,
+                  0xC300, 0xC300, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E,
+                  0xC300, 0xC300, 0x000E, 0xF801, 0xF801, 0xF801, 0xF801, 0xF801, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E, 0x000E
+                };
+
+                auto rgb565_to_hex = [](uint16_t v) -> uint32_t {
+                  uint8_t r5 = (v >> 11) & 0x1F;
+                  uint8_t g6 = (v >> 5) & 0x3F;
+                  uint8_t b5 = v & 0x1F;
+                  uint8_t r8 = (r5 << 3) | (r5 >> 2);
+                  uint8_t g8 = (g6 << 2) | (g6 >> 4);
+                  uint8_t b8 = (b5 << 3) | (b5 >> 2);
+                  return ((uint32_t) r8 << 16) | ((uint32_t) g8 << 8) | b8;
+                };
+
+                // SCALE is fractional now (filling the full canvas, not a clean integer multiple of 64),
+                // so each source pixel maps to a variable-sized block: its screen-space bounds are found
+                // by rounding both edges independently, which tiles without gaps or overlaps.
+                auto blit = [&](const uint16_t *data, int sw, int sh, int32_t gx, int32_t gy) {
+                  for (int sy = 0; sy < sh; sy++) {
+                    int32_t by0 = OFFSET_Y + (int32_t) roundf((gy + sy) * SCALE);
+                    int32_t by1 = OFFSET_Y + (int32_t) roundf((gy + sy + 1) * SCALE);
+                    for (int sx = 0; sx < sw; sx++) {
+                      uint16_t px = data[sy * sw + sx];
+                      if (px == MASK_COLOR) continue;
+                      lv_color_t color = lv_color_hex(rgb565_to_hex(px));
+                      int32_t bx0 = OFFSET_X + (int32_t) roundf((gx + sx) * SCALE);
+                      int32_t bx1 = OFFSET_X + (int32_t) roundf((gx + sx + 1) * SCALE);
+                      for (int32_t y = by0; y < by1; y++) {
+                        for (int32_t x = bx0; x < bx1; x++) {
+                          lv_canvas_set_px(canvas, x, y, color, LV_OPA_COVER);
+                        }
+                      }
+                    }
+                  }
+                };
+
+                if (full_redraw) {
+                  // Sky fill (whole canvas, so it extends to fill the round bezel)
+                  lv_canvas_fill_bg(canvas, lv_color_hex(rgb565_to_hex(MASK_COLOR)), LV_OPA_COVER);
+
+                  // Background scenery (static, matches the original's one-time setup() draw calls) -
+                  // only needs to be painted once per style-entry, not every animation frame.
+                  blit(HILL_SPRITE, 20, 22, 0, 34);
+                  blit(CLOUD1_SPRITE, 13, 12, 0, 21);
+                  blit(CLOUD2_SPRITE, 13, 12, 51, 7);
+                  blit(BUSH_SPRITE, 21, 9, 43, 47);
+                  for (int i = 0; i < 8; i++) {
+                    blit(GROUND_SPRITE, 8, 8, i * 8, 56);
+                  }
+                } else {
+                  // Animation-frame fast path: only erase the small regions Mario/the blocks can occupy
+                  // (their entire travel range sits over plain sky in the original layout, so a flat
+                  // sky-colored rect fill is a safe, much cheaper stand-in for a full scene redraw).
+                  // This uses its own layer that's finished (flushed to the canvas buffer) immediately -
+                  // lv_draw_rect only queues a draw task, it doesn't render until lv_canvas_finish_layer
+                  // runs, so sharing one layer with the sprite blits below (which write immediately via
+                  // lv_canvas_set_px) would let the queued erase flush AFTER the blits and wipe them out.
+                  lv_layer_t erase_layer;
+                  lv_canvas_init_layer(canvas, &erase_layer);
+                  auto erase_rect = [&](int32_t gx, int32_t gy, int32_t gw, int32_t gh) {
+                    lv_draw_rect_dsc_t erase_dsc;
+                    lv_draw_rect_dsc_init(&erase_dsc);
+                    erase_dsc.bg_color = lv_color_hex(rgb565_to_hex(MASK_COLOR));
+                    erase_dsc.bg_opa = LV_OPA_COVER;
+                    erase_dsc.border_opa = LV_OPA_TRANSP;
+                    int32_t bx0 = OFFSET_X + (int32_t) roundf(gx * SCALE);
+                    int32_t bx1 = OFFSET_X + (int32_t) roundf((gx + gw) * SCALE);
+                    int32_t by0 = OFFSET_Y + (int32_t) roundf(gy * SCALE);
+                    int32_t by1 = OFFSET_Y + (int32_t) roundf((gy + gh) * SCALE);
+                    lv_area_t area = {bx0, by0, bx1 - 1, by1 - 1};
+                    lv_draw_rect(&erase_layer, &erase_dsc, &area);
+                  };
+                  erase_rect(23, 25, 17, 31);
+                  erase_rect(13, 7, 19, 23);
+                  erase_rect(32, 7, 19, 23);
+                  lv_canvas_finish_layer(canvas, &erase_layer);
+                }
+
+                // Blocks (hour/minute), each with its own current bounce offset
+                blit(BLOCK_SPRITE, 19, 19, 13, 11 + id(hourblock_offset));
+                blit(BLOCK_SPRITE, 19, 19, 32, 11 + id(minuteblock_offset));
+
+                // Mario, idle or jumping sprite depending on current animation state
+                if (id(mario_anim_active)) {
+                  blit(MARIO_JUMP_SPRITE, 17, 16, 23, 40 + id(mario_y_offset));
+                } else {
+                  blit(MARIO_IDLE_SPRITE, 13, 16, 23, 40);
+                }
+
+                // Hour/minute digits, drawn on top of each block (matches the source's black text over the block sprite).
+                // The source displays 24-hour, non-zero-padded hour (e.g. "22:39"), zero-padded minute.
+                // The displayed value is only ever refreshed at the moment a block is actually hit (see
+                // mario_jump_animate's collision checks) or when first entering the style - not read live
+                // every frame - so the digits change exactly when the bounce happens, not the instant the
+                // jump starts.
+                if (full_redraw) {
+                  auto boot_t = id(homeassistant_time).now();
+                  if (boot_t.is_valid()) {
+                    id(mario_displayed_hour) = boot_t.hour;
+                    id(mario_displayed_minute) = boot_t.minute;
+                  }
+                }
+                int hh24 = id(mario_displayed_hour);
+                int mm = id(mario_displayed_minute);
+                int display_hour = hh24;
+                if (id(clock_12h_format).state) {
+                  display_hour = hh24 % 12;
+                  if (display_hour == 0) display_hour = 12;
+                }
+                char hbuf[4];
+                char mbuf[4];
+                snprintf(hbuf, sizeof(hbuf), "%d", display_hour);
+                snprintf(mbuf, sizeof(mbuf), "%02d", mm);
+
+                lv_layer_t layer;
+                lv_canvas_init_layer(canvas, &layer);
+
+                lv_draw_label_dsc_t digit_dsc;
+                lv_draw_label_dsc_init(&digit_dsc);
+                digit_dsc.color = lv_color_hex(0x000000);
+                digit_dsc.font = id(font_mario_digits)->get_lv_font();
+                digit_dsc.align = LV_TEXT_ALIGN_CENTER;
+                digit_dsc.text_local = true;
+
+                // lv_draw_label only centers horizontally (align: LEFT/RIGHT/CENTER) - it top-aligns
+                // vertically within whatever area is given, so the area height must tightly match the
+                // font's actual rendered height or the text lands above center instead of on it.
+                const int32_t font_h = id(font_mario_digits)->get_height();
+
+                const int32_t label_half_w = (int32_t) roundf(SCALE * 10.0f);
+
+                digit_dsc.text = hbuf;
+                int32_t hour_cx = OFFSET_X + (int32_t) roundf((13 + 9) * SCALE);
+                int32_t hour_cy = OFFSET_Y + (int32_t) roundf((11 + id(hourblock_offset) + 9) * SCALE);
+                lv_area_t hour_area = {hour_cx - label_half_w, hour_cy - font_h / 2, hour_cx + label_half_w, hour_cy - font_h / 2 + font_h};
+                lv_draw_label(&layer, &digit_dsc, &hour_area);
+
+                digit_dsc.text = mbuf;
+                int32_t minute_cx = OFFSET_X + (int32_t) roundf((32 + 9) * SCALE);
+                int32_t minute_cy = OFFSET_Y + (int32_t) roundf((11 + id(minuteblock_offset) + 9) * SCALE);
+                lv_area_t minute_area = {minute_cx - label_half_w, minute_cy - font_h / 2, minute_cx + label_half_w, minute_cy - font_h / 2 + font_h};
+                lv_draw_label(&layer, &digit_dsc, &minute_area);
+
+                lv_canvas_finish_layer(canvas, &layer);
+                lv_display_enable_invalidation(mario_disp, true);
+                lv_obj_invalidate(canvas);
+
+  - id: mario_clock_tick
+    mode: restart
+    then:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_mario};'
+              - lambda: 'return !id(mario_anim_active);'
+              - lambda: |-
+                  auto t = id(homeassistant_time).now();
+                  return t.is_valid() && t.second == 0 && t.minute != id(mario_last_minute);
+          then:
+            - script.execute: mario_jump_animate
+
+  - id: mario_jump_animate
+    mode: restart
+    then:
+      - lambda: |-
+          id(mario_anim_active) = true;
+          auto t = id(homeassistant_time).now();
+          if (t.is_valid()) id(mario_last_minute) = t.minute;
+          id(mario_y_offset) = 0;
+          id(mario_direction_up) = true;
+          id(hourblock_offset) = 0;
+          id(hourblock_bouncing) = false;
+          id(hourblock_going_up) = true;
+          id(minuteblock_offset) = 0;
+          id(minuteblock_bouncing) = false;
+          id(minuteblock_going_up) = true;
+      - while:
+          condition:
+            lambda: 'return id(mario_anim_active);'
+          then:
+            - lambda: |-
+                const int MARIO_PACE = 5;
+                const int MARIO_JUMP_HEIGHT = 14;
+                const int MOVE_PACE = 2;
+                const int MAX_MOVE_HEIGHT = 4;
+
+                if (id(mario_direction_up)) {
+                  id(mario_y_offset) -= MARIO_PACE;
+                  if (-id(mario_y_offset) >= MARIO_JUMP_HEIGHT) {
+                    id(mario_direction_up) = false;
+                  }
+                } else {
+                  id(mario_y_offset) += MARIO_PACE;
+                }
+
+                const int mario_x = 23, mario_w = 17, mario_h = 16;
+                const int mario_y = 40 + id(mario_y_offset);
+
+                auto overlaps = [&](int bx, int by, int bw, int bh) {
+                  return mario_x < bx + bw && mario_x + mario_w > bx &&
+                         mario_y < by + bh && mario_y + mario_h > by;
+                };
+
+                if (!id(hourblock_bouncing) && overlaps(13, 11 + id(hourblock_offset), 19, 19)) {
+                  id(hourblock_bouncing) = true;
+                  id(hourblock_going_up) = true;
+                  id(mario_direction_up) = false;
+                  auto hit_t = id(homeassistant_time).now();
+                  if (hit_t.is_valid()) {
+                    id(mario_displayed_hour) = hit_t.hour;
+                    id(mario_displayed_minute) = hit_t.minute;
+                  }
+                }
+                if (id(hourblock_bouncing)) {
+                  if (id(hourblock_going_up)) {
+                    id(hourblock_offset) -= MOVE_PACE;
+                    if (id(hourblock_offset) <= -MAX_MOVE_HEIGHT) {
+                      id(hourblock_offset) = -MAX_MOVE_HEIGHT;
+                      id(hourblock_going_up) = false;
+                    }
+                  } else {
+                    id(hourblock_offset) += MOVE_PACE;
+                    if (id(hourblock_offset) >= 0) {
+                      id(hourblock_offset) = 0;
+                      id(hourblock_bouncing) = false;
+                    }
+                  }
+                }
+
+                if (!id(minuteblock_bouncing) && overlaps(32, 11 + id(minuteblock_offset), 19, 19)) {
+                  id(minuteblock_bouncing) = true;
+                  id(minuteblock_going_up) = true;
+                  id(mario_direction_up) = false;
+                  auto hit_t2 = id(homeassistant_time).now();
+                  if (hit_t2.is_valid()) {
+                    id(mario_displayed_hour) = hit_t2.hour;
+                    id(mario_displayed_minute) = hit_t2.minute;
+                  }
+                }
+                if (id(minuteblock_bouncing)) {
+                  if (id(minuteblock_going_up)) {
+                    id(minuteblock_offset) -= MOVE_PACE;
+                    if (id(minuteblock_offset) <= -MAX_MOVE_HEIGHT) {
+                      id(minuteblock_offset) = -MAX_MOVE_HEIGHT;
+                      id(minuteblock_going_up) = false;
+                    }
+                  } else {
+                    id(minuteblock_offset) += MOVE_PACE;
+                    if (id(minuteblock_offset) >= 0) {
+                      id(minuteblock_offset) = 0;
+                      id(minuteblock_bouncing) = false;
+                    }
+                  }
+                }
+
+                if (mario_y + mario_h >= 56) {
+                  id(mario_y_offset) = 0;
+                  id(mario_anim_active) = false;
+                }
+            - script.execute:
+                id: mario_draw_scene
+                full_redraw: false
+            - delay: 25ms
+      - script.execute:
+          id: mario_draw_scene
+          full_redraw: false
+
+  - id: photo_pill_layout
+    then:
+      - lambda: |-
+          if (id(clock_show_date).state) {
+            lv_obj_set_height(id(photo_clock_pill), 62);
+            lv_obj_align(id(photo_clock_label), LV_ALIGN_TOP_MID, 0, 6);
+            lv_obj_clear_flag(id(photo_date_label), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_set_height(id(photo_clock_pill), 38);
+            lv_obj_align(id(photo_clock_label), LV_ALIGN_CENTER, 0, 0);
+            lv_obj_add_flag(id(photo_date_label), LV_OBJ_FLAG_HIDDEN);
+          }
+      - script.execute: photo_ampm_update
+
+  - id: photo_ampm_update
+    then:
+      - lambda: |-
+          if (!id(clock_12h_format).state) {
+            lv_obj_add_flag(id(photo_ampm_label), LV_OBJ_FLAG_HIDDEN);
+            return;
+          }
+          auto t = id(homeassistant_time).now();
+          lv_label_set_text(id(photo_ampm_label), (t.is_valid() && t.hour >= 12) ? "P" : "A");
+          lv_obj_update_layout(id(photo_clock_label));
+          lv_obj_align_to(id(photo_ampm_label), id(photo_clock_label), LV_ALIGN_OUT_RIGHT_BOTTOM, 3, -2);
+          lv_obj_clear_flag(id(photo_ampm_label), LV_OBJ_FLAG_HIDDEN);
+
+  - id: load_family_photo
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(clock_style_mode) == ${clock_style_photo};'
+          then:
+            - lambda: |-
+                std::string url = id(family_photo_url).state;
+                if (url.empty()) {
+                  url = "https://raw.githubusercontent.com/RealDeco/sendspin-guition/main/images/family_photo1.png";
+                }
+                id(family_photo_image)->set_url(url);
+                id(family_photo_image)->update();
+
+  - id: load_standby_background
+    mode: restart
+    then:
+      - online_image.set_url:
+          id: standby_background_image
+          url: !lambda |-
+            return "https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Other/240x240/" + id(standby_background_choice).current_option().str() + ".png";
+
+switch:
+  # NS4150B amp enable (PA_CTRL); pulled low on the board, so the amp is off until this goes high
+  - platform: gpio
+    id: onboard_amp
+    pin: GPIO57
+    internal: true
+    restore_mode: ALWAYS_OFF
+
+  - platform: template
+    id: startup_sound_switch
+    name: Startup sound
+    icon: "mdi:card-text-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: template
+    id: wake_word_sound_switch
+    name: Wake word sound
+    icon: "mdi:ear-hearing"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: template
+    name: Use listen light
+    id: use_listen_light
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - script.execute: reset_led
+    on_turn_off:
+      - script.execute: reset_led
+
+  - platform: template
+    name: Use music light
+    id: use_music_light
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - if:
+          condition:
+            media_player.is_playing: usb_media_player
+          then:
+            - script.execute: music_led
+    on_turn_off:
+      - if:
+          condition:
+            media_player.is_playing: usb_media_player
+          then:
+            - script.execute: music_led
+
+  # Keep the wake word running while music plays (no echo cancellation; default off)
+  - platform: template
+    name: Wake word during music
+    id: wake_word_during_music
+    icon: "mdi:microphone-message"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    on_turn_on:
+      - if:
+          condition:
+            media_player.is_playing: usb_media_player
+          then:
+            - script.execute: start_wake_word
+    on_turn_off:
+      - if:
+          condition:
+            and:
+              - media_player.is_playing: usb_media_player
+              - not:
+                  voice_assistant.is_running:
+          then:
+            - script.execute: stop_wake_word
+
+  - platform: template
+    name: Mute
+    id: mute
+    icon: "mdi:microphone-off"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    on_turn_off:
+      - microphone.unmute: ${va_microphone}
+      - script.execute: start_wake_word
+      - script.execute: update_mute_icon
+    on_turn_on:
+      - script.execute: stop_wake_word
+      - microphone.mute: ${va_microphone}
+      - script.execute: update_mute_icon
+
+  - platform: template
+    id: timer_ringing
+    optimistic: true
+    internal: true
+    restore_mode: ALWAYS_OFF
+    on_turn_off:
+      - micro_wake_word.disable_model: stop
+      - script.execute: disable_repeat
+      - if:
+          condition:
+            lambda: return id(va_phase) == ${va_phase_timer_ringing};
+          then:
+            - script.execute:
+                id: set_va_phase
+                phase: ${va_phase_idle}
+      - if:
+          condition:
+            media_player.is_announcing:
+              id: usb_media_player
+          then:
+            media_player.stop:
+              announcement: true
+              id: usb_media_player
+    on_turn_on:
+      - micro_wake_word.enable_model: stop
+      - script.execute: ring_timer
+      - delay: 15min
+      - switch.turn_off: timer_ringing
+
+  - platform: sendspin
+    id: sendspin_unpaired_access
+    type: unpaired_access
+    name: "Sendspin Unpaired Access"
+    restore_mode: RESTORE_DEFAULT_ON
+
+  # Ethernet on/off. Off stops it completely, so Wi-Fi keeps its DNS servers; turn it on before plugging in a cable.
+  # A change restarts the board and on_boot applies it: switching interfaces while running freezes the loop for
+  # ~5 s, leaves Ethernet without DNS and strands the voice assistant on the dropped Wi-Fi connection.
+  # The switch restores before display_ready is set, so the restore at boot does not restart again.
+  - platform: template
+    id: ethernet_switch
+    name: Ethernet
+    icon: "mdi:ethernet"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_state:
+      - if:
+          condition:
+            lambda: return id(display_ready);
+          then:
+            # Let the switch store its new state, then write it to flash before restarting
+            - delay: 100ms
+            - lambda: global_preferences->sync();
+            - delay: 1s
+            - button.press: restart_button
+
+  # Clock options
+  - platform: template
+    id: standby_background_enabled
+    name: Clock background
+    icon: "mdi:image-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    # Downloads the last picked wallpaper (on_boot sets it from "Clock background image")
+    on_turn_on:
+      - component.update: standby_background_image
+    on_turn_off:
+      - lvgl.widget.hide: standby_background_widget
+      - online_image.release: standby_background_image
+
+  - platform: template
+    id: clock_12h_format
+    name: 12-Hour Clock
+    icon: "mdi:clock-time-four-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - component.update: clock_hms
+      - script.execute: retro_clock_redraw
+      - script.execute:
+          id: mario_draw_scene
+          full_redraw: true
+    on_turn_off:
+      - component.update: clock_hms
+      - script.execute: retro_clock_redraw
+      - script.execute:
+          id: mario_draw_scene
+          full_redraw: true
+
+  # Re-applies the style, so every clock that has a date shows or hides it
+  - platform: template
+    id: clock_show_date
+    name: Show Date
+    icon: "mdi:calendar-blank-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_state:
+      - if:
+          condition:
+            lambda: return id(display_ready);
+          then:
+            - script.execute:
+                id: apply_clock_style
+                style_mode: !lambda return id(clock_style_mode);
+
+  - platform: template
+    id: clock_show_seconds
+    name: Show Seconds
+    icon: "mdi:timer-outline"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - component.update: clock_hms
+      - script.execute: analog_clock_redraw
+      - script.execute: retro_clock_redraw
+    on_turn_off:
+      - component.update: clock_hms
+      - script.execute: analog_clock_redraw
+      - script.execute: retro_clock_redraw
+
+  # Tick marks on the analog clock
+  - platform: template
+    id: clock_show_gfx
+    name: Show GFX
+    icon: "mdi:radar"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - script.execute: analog_clock_redraw
+    on_turn_off:
+      - script.execute: analog_clock_redraw
+
+  # Weather icon and temperature (digital and analog clocks)
+  - platform: template
+    id: clock_show_weather
+    name: Show Weather
+    icon: "mdi:weather-partly-cloudy"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - component.update: weather_line
+    on_turn_off:
+      - component.update: weather_line
+
+  # The scrolling temperature, feels like and wind line (digital clock)
+  - platform: template
+    id: clock_show_feels_like
+    name: Show Feels Like
+    icon: "mdi:thermometer-lines"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - component.update: weather_line
+    on_turn_off:
+      - component.update: weather_line
+
+select:
+  - platform: template
+    entity_category: config
+    name: Wake word engine location
+    id: wake_word_engine_location
+    icon: "mdi:account-voice"
+    optimistic: true
+    restore_value: true
+    options:
+      - In Home Assistant
+      - On device
+    initial_option: On device
+    on_value:
+      - script.execute: stop_wake_word
+      - delay: 500ms
+      - if:
+          condition:
+            switch.is_off: mute
+          then:
+            - script.execute: start_wake_word
+
+  - platform: template
+    id: clock_style_choice
+    name: Clock Style
+    icon: "mdi:clock-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_option: Digital Clock
+    options:
+      - Digital Clock
+      - Analog Clock
+      - Rooms
+      - Retro
+      - Mario
+      - Family Photo
+      - Cyberclock
+    set_action:
+      - script.execute:
+          id: apply_clock_style
+          style_mode: !lambda |-
+            if (x == "Analog Clock") return ${clock_style_analog};
+            if (x == "Rooms") return ${clock_style_rooms};
+            if (x == "Retro") return ${clock_style_retro};
+            if (x == "Mario") return ${clock_style_mario};
+            if (x == "Family Photo") return ${clock_style_photo};
+            if (x == "Cyberclock") return ${clock_style_cyber};
+            return ${clock_style_digital};
+
+  - platform: template
+    id: standby_background_choice
+    name: Clock background image
+    icon: "mdi:image-multiple-outline"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_option: clock
+    options:
+      - blackvelvet
+      - chip
+      - chip2
+      - clock
+      - cyanvelvet
+      - darkrose
+      - hacker
+      - leaves
+      - mission
+      - neonwaves
+      - purplevelvet
+      - redmarble
+      - starrysky
+      - tron
+      - waterdrops
+      - waves
+    # Picking a wallpaper shows it, turning the background on when it is off
+    set_action:
+      - online_image.set_url:
+          id: standby_background_image
+          url: !lambda |-
+            return "https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/images/Other/240x240/" + x + ".png";
+          update: !lambda return id(standby_background_enabled).state;
+      - if:
+          condition:
+            switch.is_off: standby_background_enabled
+          then:
+            - switch.turn_on: standby_background_enabled
+
+text:
+  # Family Photo clock: a ${imagewidth}x${imageheight} PNG; empty uses the default photo
+  - platform: template
+    id: family_photo_url
+    name: Family photo URL
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    mode: text
+    on_value:
+      - script.execute: load_family_photo
+
+text_sensor:
+  - platform: sendspin
+    id: sendspin_track_title
+    type: title
+    name: Track Title
+    on_value:
+      - component.update: now_playing_text
+
+  - platform: sendspin
+    id: sendspin_artist
+    type: artist
+    name: Artist
+    on_value:
+      - component.update: now_playing_text
+
+  - platform: sendspin
+    id: sendspin_album
+    type: album
+    name: Album
+    on_value:
+      - lambda: |-
+          id(last_album_art_valid) = id(sendspin_album_art_valid);
+          id(sendspin_album_art_valid) = false;
+      - component.update: now_playing_text
+
+  # Sendspin pairing code while a pairing is pending (empty otherwise)
+  - platform: sendspin
+    id: sendspin_pairing_code
+    type: pairing_code
+    name: Sendspin Pairing Code
+    icon: "mdi:numeric"
+
+  # Display: "Title - Artist" under the album art
+  - platform: template
+    id: now_playing_text
+    update_interval: never
+    lambda: |-
+      std::string s = id(sendspin_track_title).get_state();
+      auto a = id(sendspin_artist).get_state();
+      if (!a.empty()) {
+        if (!s.empty()) s += " - ";
+        s += a;
+      }
+      return s;
+    on_value:
+      - lvgl.label.update:
+          id: now_playing_label
+          text: !lambda return x;
+
+  # Display: idle page clocks, date and weather
+  - platform: template
+    id: clock_hms
+    update_interval: 1s
+    lambda: |-
+      auto t = id(homeassistant_time).now();
+      if (!t.is_valid()) return std::string("--:--:--");
+      bool show_seconds = id(clock_show_seconds).state;
+      int hour_disp = t.hour;
+      if (id(clock_12h_format).state) {
+        hour_disp = t.hour % 12;
+        if (hour_disp == 0) hour_disp = 12;
+      }
+      bool hide_colons = show_seconds && ((t.second % 2) == 0);
+      char buf[16];
+      if (show_seconds) {
+        if (hide_colons) snprintf(buf, sizeof(buf), "%02d %02d %02d", hour_disp, t.minute, t.second);
+        else snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hour_disp, t.minute, t.second);
+      } else {
+        if (hide_colons) snprintf(buf, sizeof(buf), "%02d %02d", hour_disp, t.minute);
+        else snprintf(buf, sizeof(buf), "%02d:%02d", hour_disp, t.minute);
+      }
+      int h12 = t.hour % 12;
+      if (h12 == 0) h12 = 12;
+      int next_h12 = (h12 % 12) + 1;
+      static const char* cyber_num_words[] = {
+        "", "ONE","TWO","THREE","FOUR","FIVE","SIX","SEVEN","EIGHT","NINE","TEN",
+        "ELEVEN","TWELVE","THIRTEEN","FOURTEEN","FIFTEEN","SIXTEEN","SEVENTEEN","EIGHTEEN","NINETEEN","TWENTY"
+      };
+      auto cyber_minute_words = [&](int m) -> std::string {
+        if (m >= 13 && m <= 19) {
+          static const char* cyber_teen_stems[] = {"THIR","FOUR","FIF","SIX","SEVEN","EIGHT","NINE"};
+          return std::string(cyber_teen_stems[m - 13]) + "\nTEEN";
+        }
+        if (m <= 20) return std::string(cyber_num_words[m]);
+        if (m == 30) return std::string("THIRTY");
+        return std::string("TWENTY\n") + cyber_num_words[m - 20];
+      };
+      std::string cyber_phrase;
+      if (t.minute == 0) {
+        cyber_phrase = std::string(cyber_num_words[h12]) + "\nO\nCLOCK";
+      } else if (t.minute <= 30) {
+        cyber_phrase = cyber_minute_words(t.minute) + "\nPAST\n" + cyber_num_words[h12];
+      } else {
+        cyber_phrase = cyber_minute_words(60 - t.minute) + "\nTO\n" + cyber_num_words[next_h12];
+      }
+      lv_label_set_text(id(cyber_time_label), cyber_phrase.c_str());
+      return std::string(buf);
+    on_value:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_digital};'
+          then:
+            - lvgl.label.update:
+                id: clock_label
+                text: !lambda return x;
+            - lambda: |-
+                if (!id(clock_12h_format).state) {
+                  lv_obj_add_flag(id(clock_ampm_label), LV_OBJ_FLAG_HIDDEN);
+                  return;
+                }
+                auto t = id(homeassistant_time).now();
+                lv_label_set_text(id(clock_ampm_label), (t.is_valid() && t.hour >= 12) ? "P" : "A");
+                lv_point_t txt_size;
+                lv_text_get_size(&txt_size, x.c_str(), id(font_7seg)->get_lv_font(), 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+                lv_area_t clock_area;
+                lv_obj_get_coords(id(clock_label), &clock_area);
+                int32_t label_cx = (clock_area.x1 + clock_area.x2) / 2;
+                int32_t label_bottom = clock_area.y2;
+                lv_obj_set_pos(id(clock_ampm_label), label_cx + txt_size.x / 2 + 1, label_bottom - 14);
+                lv_obj_clear_flag(id(clock_ampm_label), LV_OBJ_FLAG_HIDDEN);
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_rooms};'
+          then:
+            - lvgl.label.update:
+                id: rooms_clock_label
+                text: !lambda return x;
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_photo};'
+          then:
+            - lvgl.label.update:
+                id: photo_clock_label
+                text: !lambda return x;
+            - script.execute: photo_ampm_update
+
+  - platform: template
+    id: clock_date
+    update_interval: 30s
+    lambda: |-
+      auto t = id(homeassistant_time).now();
+      if (!t.is_valid()) return std::string("------");
+      static const char* months[] = {
+        "January","February","March","April","May","June",
+        "July","August","September","October","November","December"
+      };
+      const char* mon = (t.month >= 1 && t.month <= 12) ? months[t.month - 1] : "???";
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%d %s", t.day_of_month, mon);
+      return std::string(buf);
+    on_value:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_digital};'
+          then:
+            - lvgl.label.update:
+                id: date_label
+                text: !lambda return x;
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_rooms};'
+          then:
+            - lvgl.label.update:
+                id: rooms_date_label
+                text: !lambda return x;
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_photo};'
+          then:
+            - lvgl.label.update:
+                id: photo_date_label
+                text: !lambda return x;
+
+  - platform: template
+    id: weather_temp_big
+    update_interval: 15s
+    lambda: |-
+      if (!id(ha_weather_temperature).has_state()) return std::string("--");
+      std::string tunit = id(ha_weather_temperature_unit).state.c_str();
+      if (tunit.empty()) tunit = "\u00B0C";
+      lv_label_set_text(id(weather_big_temp_unit), tunit.c_str());
+      int ti = (int) lroundf(id(ha_weather_temperature).state);
+      char buf[8];
+      snprintf(buf, sizeof(buf), "%d", ti);
+      char abuf[16];
+      snprintf(abuf, sizeof(abuf), "%d%s", ti, tunit.c_str());
+      lv_label_set_text(id(analog_weather_temp), abuf);
+      return std::string(buf);
+    on_value:
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_digital};'
+          then:
+            - lvgl.label.update:
+                id: weather_big_temp
+                text: !lambda return x;
+
+  - platform: template
+    id: weather_line
+    update_interval: 15s
+    lambda: |-
+      if (!id(ha_weather_temperature).has_state() || !id(ha_weather_wind_speed).has_state()) {
+        return std::string("Weather unavailable");
+      }
+      std::string tunit = id(ha_weather_temperature_unit).state.c_str();
+      if (tunit.empty()) tunit = "\u00B0C";
+      std::string wunit = id(ha_weather_wind_speed_unit).state.c_str();
+      if (wunit.empty()) wunit = "m/s";
+      float temp_c = id(ha_weather_temperature).state;
+      float wind_ms = id(ha_weather_wind_speed).state;
+      float feels_c = temp_c;
+      if (temp_c <= 10.0f && wind_ms > 1.3f) {
+        float wind_kmh = wind_ms * 3.6f;
+        float v16 = powf(wind_kmh, 0.16f);
+        feels_c = 13.12f + 0.6215f * temp_c - 11.37f * v16 + 0.3965f * temp_c * v16;
+      }
+      char buf[160];
+      snprintf(buf, sizeof(buf),
+               "Temp: %.1f%s  -  Feels like: %.1f%s  -  Wind speed: %.1f %s",
+               temp_c, tunit.c_str(),
+               feels_c, tunit.c_str(),
+               wind_ms, wunit.c_str());
+      return std::string(buf);
+    on_value:
+      - lambda: |-
+          id(weather_available) = (x != "Weather unavailable");
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_digital};'
+          then:
+            - if:
+                condition:
+                  lambda: return id(weather_available) && id(clock_show_weather).state;
+                then:
+                  - lvgl.widget.show: weather_header
+                else:
+                  - lvgl.widget.hide: weather_header
+            - if:
+                condition:
+                  lambda: return id(weather_available) && id(clock_show_feels_like).state;
+                then:
+                  - lvgl.widget.show: weather_label
+                  - lvgl.label.update:
+                      id: weather_label
+                      text: !lambda return x;
+                else:
+                  - lvgl.widget.hide: weather_label
+          else:
+            - lvgl.widget.hide: weather_header
+            - lvgl.widget.hide: weather_label
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: idle_page
+              - lambda: 'return id(clock_style_mode) == ${clock_style_analog};'
+              - lambda: return id(weather_available) && id(clock_show_weather).state;
+          then:
+            - lvgl.widget.show: analog_weather_icon
+            - lvgl.widget.show: analog_weather_temp
+          else:
+            - lvgl.widget.hide: analog_weather_icon
+            - lvgl.widget.hide: analog_weather_temp
+
+  - platform: homeassistant
+    id: ha_weather_condition
+    entity_id: ${ha_weather_entity}
+    on_value:
+      - lambda: |-
+          const char* icon = "\U000F0590";
+          auto c = id(ha_weather_condition).state;
+          if (c == "sunny" || c == "clear") {
+            icon = "\U000F0599";
+          } else if (c == "partlycloudy") {
+            icon = "\U000F0595";
+          } else if (c == "cloudy") {
+            icon = "\U000F0590";
+          } else if (c == "rainy") {
+            icon = "\U000F0597";
+          } else if (c == "pouring") {
+            icon = "\U000F0596";
+          } else if (c == "snowy") {
+            icon = "\U000F0598";
+          } else if (c == "lightning") {
+            icon = "\U000F0593";
+          } else if (c == "hail") {
+            icon = "\U000F0592";
+          }
+          lv_label_set_text(id(weather_icon), icon);
+          lv_label_set_text(id(analog_weather_icon), icon);
+
+  - platform: homeassistant
+    id: ha_weather_temperature_unit
+    entity_id: ${ha_weather_entity}
+    attribute: temperature_unit
+
+  - platform: homeassistant
+    id: ha_weather_wind_speed_unit
+    entity_id: ${ha_weather_entity}
+    attribute: wind_speed_unit
+
+  # Which link is carrying the device: Ethernet when connected, otherwise Wi-Fi
+  - platform: template
+    name: "Network Connection"
+    icon: "mdi:network"
+    entity_category: "diagnostic"
+    update_interval: 10s
+    lambda: |-
+      if (id(ethernet_1).is_connected()) return std::string("Ethernet");
+      if (id(wifi_1).is_connected()) return std::string("WiFi");
+      return std::string("Connecting");
+
+  - platform: ethernet_info
+    ip_address:
+      name: "Ethernet IP Address"
+      entity_category: "diagnostic"
+
+  - platform: wifi_info
+    ip_address:
+      name: "WiFi IP Address"
+      entity_category: "diagnostic"
+
+sensor:
+  - platform: homeassistant
+    id: ha_weather_temperature
+    entity_id: ${ha_weather_entity}
+    attribute: temperature
+
+  - platform: homeassistant
+    id: ha_weather_wind_speed
+    entity_id: ${ha_weather_entity}
+    attribute: wind_speed
+
+  - platform: internal_temperature
+    name: "ESP Temperature"
+    entity_category: "diagnostic"
+
+  - platform: uptime
+    name: Uptime
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  # Headroom for audio alongside Bluetooth; hidden in Home Assistant, readable on the web page
+  - platform: debug
+    free:
+      name: "Free Heap"
+      entity_category: "diagnostic"
+      disabled_by_default: true
+    block:
+      name: "Largest Free Block"
+      entity_category: "diagnostic"
+      disabled_by_default: true
+    loop_time:
+      name: "Loop Time"
+      entity_category: "diagnostic"
+      disabled_by_default: true
+
+debug:
+  update_interval: 30s
+
+button:
+  - platform: restart
+    id: restart_button
+    name: "ESP Reboot"
+    icon: mdi:power-cycle
+    entity_category: ""
+
+  - platform: safe_mode
+    name: "Safe Mode Boot"
+    entity_category: "config"
+
+  - platform: template
+    id: sendspin_confirm_pairing
+    name: "Sendspin Confirm Pairing"
+    icon: mdi:link-variant
+    entity_category: config
+    on_press:
+      - sendspin.confirm_pairing_window: sendspin_hub
+
+# ---------------------------------------------------------------------------
+# Display: 1.54" ST7789 240x240 SPI display on J2. CS is tied to GND at the display, so no cs_pin.
+# ---------------------------------------------------------------------------
+
+output:
+  - platform: ledc
+    pin: GPIO40  # BLK
+    id: backlight_output
+
+  # Accent colour channels; the RGB lights below write them
+  - platform: template
+    id: accent_color_r
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent_red) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color_g
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent_green) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color_b
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent_blue) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color2_r
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent2_red) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color2_g
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent2_green) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color2_b
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent2_blue) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color3_r
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent3_red) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color3_g
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent3_green) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color3_b
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent3_blue) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color4_r
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent4_red) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color4_g
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent4_green) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+  - platform: template
+    id: accent_color4_b
+    type: float
+    write_action:
+      - lambda: |-
+          id(accent4_blue) = (int) lroundf(std::max(0.0f, std::min(1.0f, state)) * 255.0f);
+      - script.execute: apply_accent_color_debounced
+
+spi:
+  - id: display_spi
+    clk_pin: GPIO49   # SCL
+    mosi_pin: GPIO47  # SDA
+
+display:
+  - platform: mipi_spi
+    id: main_display
+    spi_id: display_spi
+    model: ST7789V
+    data_rate: 40MHz
+    spi_mode: MODE3  # Needed with CS tied low
+    dc_pin: GPIO43
+    reset_pin: GPIO45
+    dimensions:
+      width: 240
+      height: 240
+      offset_width: ${display_offset_width}
+      offset_height: ${display_offset_height}
+    transform:
+      swap_xy: ${display_swap_xy}
+      mirror_x: ${display_mirror_x}
+      mirror_y: ${display_mirror_y}
+    invert_colors: true
+    auto_clear_enabled: false
+    update_interval: never
+
+font:
+  - file:
+      type: gfonts
+      family: Noto Sans
+      weight: 300
+    id: font_display
+    size: 18
+    glyphsets:
+      - GF_Latin_Core
+      - GF_Cyrillic_Core
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 300
+    id: font_date
+    size: 22
+    glyphsets:
+      - GF_Latin_Core
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 600
+    id: font_boot
+    size: 34
+    glyphsets:
+      - GF_Latin_Core
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 700
+    id: font_temp_big
+    size: 58
+    glyphs: "0123456789-"
+
+  - file:
+      type: gfonts
+      family: Figtree
+      weight: 700
+    id: font_temp_unit
+    size: 22
+    glyphs: "\u00B0CF"
+
+  - file: https://raw.githubusercontent.com/rbtdev/spiroplot/master/fonts/DSEG7/Classic-MINI/DSEG7ClassicMini-Bold.ttf
+    id: font_7seg
+    size: 42
+    glyphs: "0123456789:- "
+
+  - file: https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf
+    id: font_mdi_weather
+    size: 56
+    glyphs:
+      - "\U000F0590"
+      - "\U000F0592"
+      - "\U000F0593"
+      - "\U000F0595"
+      - "\U000F0596"
+      - "\U000F0597"
+      - "\U000F0598"
+      - "\U000F0599"
+
+  - file: https://raw.githubusercontent.com/rbtdev/spiroplot/master/fonts/DSEG7/Classic-MINI/DSEG7ClassicMini-Bold.ttf
+    id: font_7seg_small
+    size: 26
+    glyphs: "0123456789:- "
+
+  - file: https://raw.githubusercontent.com/rbtdev/spiroplot/master/fonts/DSEG7/Classic-MINI/DSEG7ClassicMini-Bold.ttf
+    id: font_ampm
+    size: 15
+    glyphs: "AP"
+
+  - file: https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf
+    id: font_mdi_weather_small
+    size: 21
+    glyphs:
+      - "\U000F0590"
+      - "\U000F0592"
+      - "\U000F0593"
+      - "\U000F0595"
+      - "\U000F0596"
+      - "\U000F0597"
+      - "\U000F0598"
+      - "\U000F0599"
+
+  - file: https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/heads/master/fonts/materialdesignicons-webfont.ttf
+    id: font_mdi_rooms
+    size: 21
+    glyphs:
+      - "\U000F0004"
+
+  - file:
+      type: gfonts
+      family: Silkscreen
+      weight: 400
+    id: font_retro_numeral
+    size: 16
+    glyphs: "12369"
+
+  - file:
+      type: gfonts
+      family: Silkscreen
+      weight: 400
+    id: font_retro_small
+    size: 11
+    glyphs: "0123456789:RETO"
+
+  - file:
+      type: gfonts
+      family: Silkscreen
+      weight: 400
+    id: font_mario_digits
+    size: 24
+    glyphs: "0123456789"
+
+  - file: https://raw.githubusercontent.com/RealDeco/sendspin-guition/main/fonts/Anurati-Regular.otf
+    id: font_cyber_big
+    size: 34
+    glyphs: "ACEFGHIKLNOPRSTUVWXY "
+
+lvgl:
+  displays:
+    - main_display
+  buffer_size: 12%
+  color_depth: 16
+  bg_color: 0x000000
+  default_font: font_display
+
+  animations:
+    - id: album_art_crossfade
+      duration: 1500ms
+      widgets:
+        - id: outgoing_art
+          opa:
+            from: 100%
+            to: 0%
+      on_stop:
+        - sendspin.image.transition_finished: album_slot
+
+  # Above every page: the voice assistant phase image and the mute icon (the pairing overlay goes on top)
+  top_layer:
+    widgets:
+      - obj:
+          id: va_overlay
+          align: CENTER
+          width: 240
+          height: 240
+          bg_color: 0x000000
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          pad_all: 0
+          scrollable: false
+          clickable: false
+          hidden: true
+          widgets:
+            - image:
+                id: va_image
+                align: CENTER
+                src: va_loading_image
+                antialias: false
+                clickable: false
+
+      - image:
+          id: va_mute_icon
+          align: BOTTOM_RIGHT
+          src: va_mute_image
+          antialias: false
+          clickable: false
+          hidden: true
+
+  pages:
+    - id: boot_sound_page
+      bg_color: 0x000000
+      widgets:
+        - label:
+            align: CENTER
+            text: "Home Connected"
+            text_color: 0xFFFFFF
+            text_font: font_boot
+            width: 230
+            long_mode: WRAP
+            text_align: CENTER
+
+    - id: idle_page
+      bg_color: 0x000000
+      # Labels only update while this page shows, so refresh them when it comes back
+      on_load:
+        - component.update: clock_hms
+        - component.update: clock_date
+        - component.update: weather_temp_big
+        - component.update: weather_line
+      widgets:
+        - image:
+            id: standby_background_widget
+            align: TOP_MID
+            x: 0
+            y: 0
+            src: standby_background_image
+            width: ${imagewidth}
+            height: ${imageheight}
+            antialias: false
+            clickable: false
+            hidden: true
+
+        - obj:
+            id: photo_clock_block
+            align: TOP_MID
+            x: 0
+            y: 0
+            width: ${imagewidth}
+            height: ${imageheight}
+            bg_opa: TRANSP
+            border_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            hidden: true
+            widgets:
+              - image:
+                  id: photo_clock_image_widget
+                  align: CENTER
+                  src: family_photo_image
+                  antialias: false
+                  clickable: false
+                  hidden: true
+
+              - obj:
+                  id: photo_clock_pill
+                  align: BOTTOM_MID
+                  y: -30
+                  width: 170
+                  height: 62
+                  bg_color: 0x000000
+                  bg_opa: 55%
+                  border_opa: TRANSP
+                  radius: 12
+                  pad_all: 0
+                  scrollable: false
+                  clickable: false
+                  widgets:
+                    - label:
+                        id: photo_clock_label
+                        align: TOP_MID
+                        y: 6
+                        text: "--:--"
+                        text_color: 0xFFFFFF
+                        text_font: font_7seg_small
+                        text_align: CENTER
+
+                    - label:
+                        id: photo_ampm_label
+                        text: ""
+                        text_color: 0xFFFFFF
+                        text_font: font_ampm
+                        hidden: true
+
+                    - label:
+                        id: photo_date_label
+                        align: BOTTOM_MID
+                        y: -6
+                        text: "------"
+                        text_color: 0xFFFFFF
+                        text_font: font_display
+                        text_align: CENTER
+
+        - obj:
+            id: idle_center_block
+            align: CENTER
+            width: 240
+            height: 230
+            bg_opa: TRANSP
+            border_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            widgets:
+              - label:
+                  id: clock_label
+                  align: TOP_MID
+                  y: 6
+                  width: 240
+                  text: "--:--:--"
+                  text_color: 0xFFFF00
+                  text_font: font_7seg
+                  text_letter_space: 0
+                  text_align: CENTER
+
+              - label:
+                  id: date_label
+                  align: TOP_MID
+                  y: 58
+                  width: 240
+                  text: "------"
+                  text_color: 0xFFFFFF
+                  text_font: font_date
+                  text_align: CENTER
+
+              - obj:
+                  id: weather_header
+                  align: TOP_MID
+                  y: 90
+                  width: 240
+                  height: 70
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  pad_all: 0
+                  scrollable: false
+                  widgets:
+                    - label:
+                        id: weather_icon
+                        align: CENTER
+                        x: -37
+                        y: 0
+                        text: "\U000F0590"
+                        text_color: 0xFFFFFF
+                        text_font: font_mdi_weather
+
+                    - label:
+                        id: weather_big_temp
+                        align: CENTER
+                        x: 36
+                        y: 2
+                        text: "--"
+                        text_color: 0xFFFF00
+                        text_font: font_temp_big
+
+                    - label:
+                        id: weather_big_temp_unit
+                        align: CENTER
+                        x: 76
+                        y: -14
+                        text: "\u00B0C"
+                        text_color: 0xFFFF00
+                        text_font: font_temp_unit
+
+              - label:
+                  id: weather_label
+                  align: TOP_MID
+                  x: 0
+                  y: 167
+                  width: 220
+                  text: "Weather..."
+                  text_color: 0x66CCFF
+                  text_font: font_display
+                  long_mode: SCROLL_CIRCULAR
+                  text_align: CENTER
+
+        - label:
+            id: clock_ampm_label
+            x: 0
+            y: 0
+            text: ""
+            text_color: 0xFFFF00
+            text_font: font_ampm
+            hidden: true
+
+        - label:
+            id: analog_weather_icon
+            align: CENTER
+            x: -68
+            y: 0
+            text: ""
+            text_color: 0xFFFFFF
+            text_font: font_mdi_weather_small
+            hidden: true
+
+        - label:
+            id: analog_weather_temp
+            align: CENTER
+            x: 68
+            y: 0
+            text: ""
+            text_color: 0xFFFF00
+            text_font: font_display
+            text_align: CENTER
+            hidden: true
+
+        - obj:
+            id: cyber_time_container
+            align: CENTER
+            width: ${screenwidth}
+            height: ${screenheight}
+            bg_opa: TRANSP
+            border_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            widgets:
+              - label:
+                  id: cyber_time_label
+                  align: CENTER
+                  width: 200
+                  text: ""
+                  text_color: 0xFFFFFF
+                  text_font: font_cyber_big
+                  text_letter_space: 2
+                  text_align: CENTER
+                  long_mode: WRAP
+                  hidden: true
+
+        - label:
+            id: rooms_clock_label
+            align: TOP_MID
+            y: 14
+            width: 207
+            text: "--:--"
+            text_color: 0xFFFF00
+            text_font: font_7seg_small
+            text_letter_space: 0
+            text_align: CENTER
+            hidden: true
+
+        - label:
+            id: rooms_date_label
+            align: TOP_MID
+            y: 186
+            width: 190
+            text: "------"
+            text_color: 0xFFFFFF
+            text_font: font_date
+            text_align: CENTER
+            hidden: true
+
+        - obj:
+            id: room1_box
+            align: TOP_LEFT
+            x: 33
+            y: 57
+            width: 67
+            height: 60
+            radius: 8
+            border_width: 2
+            border_color: 0xFFFF00
+            bg_color: 0x4FC3F7
+            bg_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            hidden: true
+            widgets:
+              - label:
+                  id: room1_icon
+                  align: CENTER
+                  text: "\U000F0004"
+                  text_color: 0xFFFFFF
+                  text_font: font_mdi_rooms
+                  hidden: true
+
+        - obj:
+            id: room2_box
+            align: TOP_LEFT
+            x: 33
+            y: 120
+            width: 67
+            height: 60
+            radius: 8
+            border_width: 2
+            border_color: 0xFFFF00
+            bg_color: 0xE53935
+            bg_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            hidden: true
+            widgets:
+              - label:
+                  id: room2_icon
+                  align: CENTER
+                  text: "\U000F0004"
+                  text_color: 0xFFFFFF
+                  text_font: font_mdi_rooms
+                  hidden: true
+
+        - obj:
+            id: room3_box
+            align: TOP_LEFT
+            x: 104
+            y: 57
+            width: 39
+            height: 123
+            radius: 8
+            border_width: 2
+            border_color: 0xFFFF00
+            bg_color: 0xFDD835
+            bg_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            hidden: true
+            widgets:
+              - label:
+                  id: room3_icon
+                  align: CENTER
+                  text: "\U000F0004"
+                  text_color: 0xFFFFFF
+                  text_font: font_mdi_rooms
+                  hidden: true
+
+        - obj:
+            id: room4_box
+            align: TOP_LEFT
+            x: 147
+            y: 57
+            width: 60
+            height: 39
+            radius: 8
+            border_width: 2
+            border_color: 0xFFFF00
+            bg_color: 0xBA68C8
+            bg_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            hidden: true
+            widgets:
+              - label:
+                  id: room4_icon
+                  align: CENTER
+                  text: "\U000F0004"
+                  text_color: 0xFFFFFF
+                  text_font: font_mdi_rooms
+                  hidden: true
+
+        - obj:
+            id: room5_box
+            align: TOP_LEFT
+            x: 147
+            y: 99
+            width: 60
+            height: 39
+            radius: 8
+            border_width: 2
+            border_color: 0xFFFF00
+            bg_color: 0x1A237E
+            bg_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            hidden: true
+            widgets:
+              - label:
+                  id: room5_icon
+                  align: CENTER
+                  text: "\U000F0004"
+                  text_color: 0xFFFFFF
+                  text_font: font_mdi_rooms
+                  hidden: true
+
+        - obj:
+            id: room6_box
+            align: TOP_LEFT
+            x: 147
+            y: 141
+            width: 60
+            height: 39
+            radius: 8
+            border_width: 2
+            border_color: 0xFFFF00
+            bg_color: 0x81C784
+            bg_opa: TRANSP
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            hidden: true
+            widgets:
+              - label:
+                  id: room6_icon
+                  align: CENTER
+                  text: "\U000F0004"
+                  text_color: 0xFFFFFF
+                  text_font: font_mdi_rooms
+                  hidden: true
+
+        # Analog, Retro and Mario clocks draw here; above the other clock widgets
+        - canvas:
+            id: clock_canvas
+            align: CENTER
+            width: ${screenwidth}
+            height: ${screenheight}
+            transparent: true
+            clickable: false
+            scrollable: false
+            hidden: true
+
+    - id: sendspin_page
+      bg_color: 0x000000
+      widgets:
+        - image:
+            id: incoming_art
+            align: TOP_MID
+            x: 0
+            y: 0
+            src: fallback_playing_image
+            width: 216
+            height: 216
+            antialias: false
+            clickable: false
+
+        - image:
+            id: outgoing_art
+            align: TOP_MID
+            x: 0
+            y: 0
+            src: fallback_playing_image
+            width: 216
+            height: 216
+            antialias: false
+            clickable: false
+
+        - label:
+            id: now_playing_label
+            align: BOTTOM_MID
+            y: -3
+            width: 232
+            text: ""
+            text_color: 0xFFFFFF
+            long_mode: SCROLL_CIRCULAR
+            text_align: CENTER
