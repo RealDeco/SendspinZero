@@ -2,6 +2,8 @@
 # Wiring: OUT -> GPIO35, ESP TX GPIO37 -> radar RX, radar TX -> ESP RX GPIO39.
 # GPIO37 is a strapping pin; it only drives the radar's RX input, so boot is unaffected.
 # No data on the UART sensors? Swap tx_pin and rx_pin.
+# "Radar Screen Control" turns the screen (screen_backlight) on with presence on OUT and off after
+# "Radar Screen Off Delay" without it; uses ids from the display file, so include it only there.
 
 uart:
   - id: ld2410_uart
@@ -26,6 +28,19 @@ binary_sensor:
       mode:
         input: true
         pulldown: true
+    on_press:
+      - if:
+          condition:
+            switch.is_on: radar_screen_control
+          then:
+            - script.stop: radar_screen_off
+            - light.turn_on: screen_backlight
+    on_release:
+      - if:
+          condition:
+            switch.is_on: radar_screen_control
+          then:
+            - script.execute: radar_screen_off
   # Presence from the UART frames
   - platform: ld2410
     has_target:
@@ -64,6 +79,55 @@ switch:
   - platform: ld2410
     engineering_mode:
       name: "Radar Engineering Mode"
+
+  # Screen on with presence, off after the delay without it
+  - platform: template
+    id: radar_screen_control
+    name: "Radar Screen Control"
+    icon: mdi:monitor-eye
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    on_turn_on:
+      - if:
+          condition:
+            binary_sensor.is_off: ld2410_out
+          then:
+            - script.execute: radar_screen_off
+    # Never leave the screen dark once the feature is off
+    on_turn_off:
+      - script.stop: radar_screen_off
+      - light.turn_on: screen_backlight
+
+number:
+  - platform: template
+    id: radar_screen_off_delay
+    name: "Radar Screen Off Delay"
+    icon: mdi:timer-outline
+    entity_category: config
+    unit_of_measurement: s
+    min_value: 10
+    max_value: 1800
+    step: 10
+    initial_value: 10
+    optimistic: true
+    restore_value: true
+
+script:
+  # Restart mode: presence coming back cancels a pending turn-off
+  - id: radar_screen_off
+    mode: restart
+    then:
+      - delay: !lambda return id(radar_screen_off_delay).state * 1000;
+      # Keep the screen on while music plays or the voice assistant is busy
+      - wait_until:
+          condition:
+            and:
+              - not:
+                  media_player.is_playing: usb_media_player
+              - not:
+                  voice_assistant.is_running:
+      - light.turn_off: screen_backlight
 
 button:
   - platform: ld2410
