@@ -1,8 +1,10 @@
 substitutions:
   va_microphone: usb_voice_mic # (options are: onboard_voice_mic, usb_voice_mic)
+  va_speaker: usb_announcement_resampler # Voice replies and sounds (options are: usb_announcement_resampler, onboard_announcement_input)
+  music_speaker: usb_media_resampler # Music (options are: usb_media_resampler, onboard_media_input)
   startup_sound_file: "Home_Connected" # (options are: available, Home_Connected, Home_Connected_Male, Computer_Ready)
   wakeup_sound: "popup" # (options are: popup, wake_word_triggered)
-  micsource_microphone: usb_mic  # Used by the micsource-beta package
+  micsource_microphone: usb_mic  # Used by the micsource-beta package below
 
 # Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Uncomment to add it.
 #packages:
@@ -14,15 +16,20 @@ substitutions:
 
 esphome:
   name: s31-function-coreboard
-  # Also the player name Sendspin reports to Music Assistant
   friendly_name: S31 Function CoreBoard
   # usb_audio first shipped in 2026.11.0
   min_version: 2026.11.0b1
   on_boot:
     - priority: -100
       then:
-        - micro_wake_word.disable_model: stop  # Enabled state is saved; never boot with it on
+        - micro_wake_word.disable_model: stop
         - script.execute: apply_outputs
+        - if:
+            condition:
+              switch.is_on: ethernet_switch
+            then:
+              - ethernet.enable:
+        - lambda: id(boot_done) = true;
 
 esp32:
   variant: esp32s31
@@ -37,17 +44,14 @@ esp32:
       CONFIG_ETH_EMAC_RGMII_TX_CLK_SRC_APLL: y
   flash_size: 16MB
 
-# Native configurations for the 16MB high-speed Octal PSRAM
 psram:
   mode: octal
 
-# Activates the built-in USB-Serial-JTAG logic for direct logging
 logger:
   hardware_uart: USB_SERIAL_JTAG
 
 api:
   on_client_connected:
-    - script.execute: stop_wake_word
     - delay: 2000ms
     - lambda: |-
         if (!id(boot_sound_played)) {
@@ -69,19 +73,21 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-# Prefer the wired link; both interfaces must be listed when Wi-Fi and Ethernet are configured together
 network:
   priority:
     - ethernet
     - wifi
 
-# Wired Gigabit Ethernet: onboard Motorcomm YT8531 PHY over RGMII
+# Wired Gigabit Ethernet: onboard Motorcomm YT8531 PHY over RGMII. It has its own MAC, so DHCP gives it its own IP.
+# Started from on_boot when the "Ethernet" switch is on. Without a cable it retries every 15 s, and each retry
+# clears the DNS servers Wi-Fi is using (ESPHome 2026.11.0b7), so keep the switch off when no cable is used.
 ethernet:
   id: ethernet_1
   type: YT8531
   mdc_pin: GPIO5
   mdio_pin: GPIO6
   power_pin: GPIO7
+  enable_on_boot: false
   # Wi-Fi is only a fallback: off while the wired link has an address, back on when it drops
   on_connect:
     - wifi.disable:
@@ -89,6 +95,12 @@ ethernet:
     - wifi.enable:
 
 globals:
+  # Set at the end of on_boot; the Ethernet switch only restarts the board after this
+  - id: boot_done
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
   - id: playing_internal_sound
     type: bool
     restore_value: no
@@ -99,7 +111,6 @@ globals:
     restore_value: no
     initial_value: "false"
 
-# Onboard RGB light: a single addressable WS2812, so it needs a timed data signal, not a plain on/off pin
 light:
   - platform: esp32_rmt_led_strip
     id: status_led
@@ -232,7 +243,7 @@ speaker:
       - id: onboard_announcement_input
       - id: onboard_media_input
 
-  # The USB branches bring the routers' audio to the dongle's rate (a pass-through at 48 kHz)
+  # The USB branches bring the audio to the dongle's rate (a pass-through at 48 kHz)
   - platform: resampler
     id: usb_announcement_resampler
     output_speaker: usb_announcement_input
@@ -245,36 +256,17 @@ speaker:
     sample_rate: 48000
     bits_per_sample: 16
 
-  # Voice replies and sounds go where "Voice reply speaker" says; mono, the mixers turn it into stereo
-  - platform: router
-    id: va_router
-    output_speakers:
-      - usb_announcement_resampler
-      - onboard_announcement_input
-    sample_rate: 48000
-    bits_per_sample: 16
-    num_channels: 1
-
-  # Music goes where "Music speaker" says
-  - platform: router
-    id: music_router
-    output_speakers:
-      - usb_media_resampler
-      - onboard_media_input
-    sample_rate: 48000
-    bits_per_sample: 16
-    num_channels: 2
-
-  # The routers pass audio through unchanged; bring every stream to their 48 kHz first
+  # Bring every stream to 48 kHz, then on to the output picked by ${va_speaker} / ${music_speaker}.
+  # Voice is mono; the mixers turn it into stereo.
   - platform: resampler
     id: va_format_resampler
-    output_speaker: va_router
+    output_speaker: ${va_speaker}
     sample_rate: 48000
     bits_per_sample: 16
 
   - platform: resampler
     id: media_resampling_speaker
-    output_speaker: music_router
+    output_speaker: ${music_speaker}
     sample_rate: 48000
     bits_per_sample: 16
 
@@ -357,7 +349,7 @@ media_player:
     announcement_pipeline:
       speaker: va_format_resampler
       format: FLAC     # Least CPU-intensive codec
-      num_channels: 1  # Must match the router
+      num_channels: 1  # Voice is mono
       sample_rate: 48000
       sources:
         - audio_file_announcement_source
@@ -366,7 +358,7 @@ media_player:
     media_pipeline:
       speaker: media_resampling_speaker
       format: FLAC     # Least CPU-intensive codec
-      num_channels: 2  # Must match the router
+      num_channels: 2
       sample_rate: 48000
       sources:
         - http_media_source
@@ -374,7 +366,7 @@ media_player:
 
     on_announcement:
       - script.stop: mp_idle_debounce
-      - mixer_speaker.apply_ducking:  # Lower music under announcements
+      - mixer_speaker.apply_ducking:
           id: usb_media_input
           decibel_reduction: 20
           duration: 0.0s
@@ -382,7 +374,6 @@ media_player:
           id: onboard_media_input
           decibel_reduction: 20
           duration: 0.0s
-      # On device the wake word keeps running, so "stop" can be heard
       - if:
           condition:
             and:
@@ -543,9 +534,6 @@ voice_assistant:
               effect: none
 
   on_end:
-    # on_end fires when Home Assistant ends the pipeline, often before the reply starts playing. The VA itself
-    # stays out of IDLE until the player reports its reply finished; is_running() ignores continuous mode,
-    # unlike the voice_assistant.is_running condition.
     - wait_until:
         condition:
           lambda: return !id(va).is_running();
@@ -556,13 +544,15 @@ voice_assistant:
             id: usb_media_player
         timeout: 0.5s
     - wait_until:
-        - and:
+        condition:
+          and:
             - not:
                 media_player.is_announcing:
                   id: usb_media_player
             - not:
                 speaker.is_playing:
-                  id: va_router
+                  id: va_format_resampler
+        timeout: 10s
     - mixer_speaker.apply_ducking:
         id: usb_media_input
         decibel_reduction: 0
@@ -571,8 +561,6 @@ voice_assistant:
         id: onboard_media_input
         decibel_reduction: 0
         duration: 1.0s
-    # Don't rely on mp_idle_debounce: on the onboard speaker the player goes idle before the VA has ended.
-    # Music still playing goes back to its music light.
     - if:
         condition:
           media_player.is_playing: usb_media_player
@@ -580,7 +568,6 @@ voice_assistant:
           - script.execute: music_led
         else:
           - script.execute: reset_led
-    # During music the wake word only comes back when "Wake word during music" is on
     - if:
         condition:
           and:
@@ -655,36 +642,14 @@ voice_assistant:
               effect: "Fast Pulse"
 
 script:
-  # Route music and voice replies to their selected outputs; the onboard amp is powered while either uses it
+  # The onboard amp is powered when either output is the onboard speaker
   - id: apply_outputs
     then:
       - if:
           condition:
-            lambda: return id(music_speaker_select).current_option() == "Onboard speaker";
-          then:
-            - router.speaker.switch_output:
-                id: music_router
-                target_speaker: onboard_media_input
-          else:
-            - router.speaker.switch_output:
-                id: music_router
-                target_speaker: usb_media_resampler
-      - if:
-          condition:
-            lambda: return id(va_speaker_select).current_option() == "Onboard speaker";
-          then:
-            - router.speaker.switch_output:
-                id: va_router
-                target_speaker: onboard_announcement_input
-          else:
-            - router.speaker.switch_output:
-                id: va_router
-                target_speaker: usb_announcement_resampler
-      - if:
-          condition:
             lambda: |-
-              return id(music_speaker_select).current_option() == "Onboard speaker" ||
-                     id(va_speaker_select).current_option() == "Onboard speaker";
+              return std::string("${va_speaker}") == "onboard_announcement_input" ||
+                     std::string("${music_speaker}") == "onboard_media_input";
           then:
             - switch.turn_on: onboard_amp
           else:
@@ -706,7 +671,6 @@ script:
             - script.execute: reset_led
             - script.execute: start_wake_word
 
-  # While music plays: green slow pulse, or the normal idle light when "Use music light" is off
   - id: music_led
     then:
       - if:
@@ -799,7 +763,7 @@ script:
             media_player.is_announcing:
               id: usb_media_player
           timeout: 5s
-      - delay: 1s  # Skip the start of the reply
+      - delay: 1s
       - if:
           condition:
             switch.is_off: timer_ringing
@@ -823,7 +787,6 @@ script:
           priority: true
           sound_file: "timer_finished_sound"
 
-  # Repeat the timer sound with a 500 ms gap while the timer rings
   - id: enable_repeat_one
     then:
       - media_player.repeat_one:
@@ -834,7 +797,6 @@ script:
           pipeline: announcement
           delay: 500ms
 
-  # Back to normal once the timer is silenced
   - id: disable_repeat
     then:
       - media_player.repeat_off:
@@ -988,6 +950,28 @@ switch:
     name: "Sendspin Unpaired Access"
     restore_mode: RESTORE_DEFAULT_ON
 
+  # Ethernet on/off. Off stops it completely, so Wi-Fi keeps its DNS servers; turn it on before plugging in a cable.
+  # A change restarts the board and on_boot applies it: switching interfaces while running freezes the loop for
+  # ~5 s, leaves Ethernet without DNS and strands the voice assistant on the dropped Wi-Fi connection.
+  # The switch restores before boot finishes, so the restore at boot does not restart again.
+  - platform: template
+    id: ethernet_switch
+    name: Ethernet
+    icon: "mdi:ethernet"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_state:
+      - if:
+          condition:
+            lambda: return id(boot_done);
+          then:
+            # Let the switch store its new state, then write it to flash before restarting
+            - delay: 100ms
+            - lambda: global_preferences->sync();
+            - delay: 1s
+            - button.press: restart_button
+
 select:
   - platform: template
     entity_category: config
@@ -1009,35 +993,6 @@ select:
           then:
             - script.execute: start_wake_word
 
-  - platform: template
-    entity_category: config
-    name: Voice reply speaker
-    id: va_speaker_select
-    icon: "mdi:speaker-message"
-    optimistic: true
-    restore_value: true
-    options:
-      - USB audio card
-      - Onboard speaker
-    initial_option: USB audio card
-    on_value:
-      - script.execute: apply_outputs
-
-  - platform: template
-    entity_category: config
-    name: Music speaker
-    id: music_speaker_select
-    icon: "mdi:speaker"
-    optimistic: true
-    restore_value: true
-    options:
-      - USB audio card
-      - Onboard speaker
-    initial_option: USB audio card
-    on_value:
-      - script.execute: apply_outputs
-
-# The web dashboard doesn't render media players, so surface now-playing as text sensors
 text_sensor:
   - platform: sendspin
     id: sendspin_track_title
@@ -1054,14 +1009,12 @@ text_sensor:
     type: album
     name: Album
 
-  # Sendspin pairing code while a pairing is pending (empty otherwise)
   - platform: sendspin
     id: sendspin_pairing_code
     type: pairing_code
     name: Sendspin Pairing Code
     icon: "mdi:numeric"
 
-  # Which link is carrying the device: Ethernet normally, Wi-Fi only while the cable is out
   - platform: template
     name: "Network Connection"
     icon: "mdi:network"
@@ -1092,7 +1045,6 @@ sensor:
     update_interval: 60s
     entity_category: "diagnostic"
 
-  # Headroom for audio alongside Bluetooth; hidden in Home Assistant, readable on the web page
   - platform: debug
     free:
       name: "Free Heap"
@@ -1112,8 +1064,10 @@ debug:
 
 button:
   - platform: restart
+    id: restart_button
     name: "ESP Reboot"
     icon: mdi:power-cycle
+    entity_category: ""
 
   - platform: safe_mode
     name: "Safe Mode Boot"
