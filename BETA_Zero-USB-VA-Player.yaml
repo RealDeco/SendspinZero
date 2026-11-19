@@ -1,7 +1,7 @@
 substitutions:
   name: sendspinzero-usb
   friendly_name: SendspinZero-USB
-  micsource_microphone: usb_mic  # Used by the micsource-beta package
+  micsource_microphone: usb_mic  # Used by the micsource package
 
 # Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Uncomment to add it.
 #packages:
@@ -9,7 +9,7 @@ substitutions:
 #    url: https://github.com/RealDeco/SendspinZero
 #    ref: main
 #    refresh: 1d
-#    files: [configs/micsource-beta.yaml]
+#    files: [configs/micsource.yaml]
 
 # Optional wake word during music ("Wake word during music" switch, default off); music is ducked 20 dB while
 # the voice assistant runs. No echo cancellation: loud music near the mic means fewer detections.
