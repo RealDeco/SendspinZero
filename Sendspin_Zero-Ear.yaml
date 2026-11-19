@@ -18,9 +18,10 @@ substitutions:
   timer_finished_sound_url: media-source://media_source/local/sounds_timer_finished.flac
   # Short silent announcement that replaces a running reply when "stop" is heard
   silence_url: https://raw.githubusercontent.com/RealDeco/xiaozhi-esphome/main/sounds/silence.wav
+  micsource_microphone: raw_microphone  # Used by the micsource package
 
 #packages:
-#  # Streams the mic to Music Assistant as a Sendspin source, with its pairing; comment out to turn it off
+#  # Streams the mic to Music Assistant as a Sendspin source; comment out to turn it off
 #  micsource:
 #    url: https://github.com/RealDeco/SendspinZero.git
 #    ref: main
