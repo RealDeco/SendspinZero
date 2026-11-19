@@ -4,7 +4,7 @@ substitutions:
   music_speaker: usb_media_resampler # Music (options are: usb_media_resampler, onboard_media_input)
   startup_sound_file: "Home_Connected" # (options are: available, Home_Connected, Home_Connected_Male, Computer_Ready)
   wakeup_sound: "popup" # (options are: popup, wake_word_triggered)
-  micsource_microphone: usb_mic  # Used by the micsource-beta package below
+  micsource_microphone: usb_mic  # Used by the micsource package below
 
 # Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Uncomment to add it.
 #packages:
@@ -12,13 +12,13 @@ substitutions:
 #    url: https://github.com/RealDeco/SendspinZero
 #    ref: main
 #    refresh: 1d
-#    files: [configs/micsource-beta.yaml]
+#    files: [configs/micsource.yaml]
 
 esphome:
   name: s31-function-coreboard
   friendly_name: S31 Function CoreBoard
   # usb_audio first shipped in 2026.11.0
-  min_version: 2026.11.0b1
+  min_version: 2026.11.0
   on_boot:
     - priority: -100
       then:
