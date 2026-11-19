@@ -1,29 +1,24 @@
 ### SendspinZero Source
 substitutions:
-  name: esphome-web-ce5604
+  name: sendspinzero-source
   friendly_name: SendspinZero-Source
-
-external_components:
-  - source:
-      type: git
-      url: https://github.com/ApolloAutomation/CAST_PRO-1
-      ref: 743af5bd27ed4281eebe9bdfbab7150aaa43e199
-      path: Integrations/ESPHome/components
-    components: [sendspin_source]
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2026.10.0
+  min_version: 2026.11.0
   name_add_mac_suffix: true
   project:
     name: realdeco.sendspin_zero
-    version: "2026.10.0"
+    version: "2026.11.0"
   on_boot:
     priority: -100
     then:
       - binary_sensor.template.publish:
           id: line_in_streaming
+          state: OFF
+      - binary_sensor.template.publish:
+          id: line_in_signal
           state: OFF
 
 esp32:
@@ -70,6 +65,7 @@ microphone:
     adc_type: external
     pdm: false
     channel: stereo
+    # The PCM1808's 24-bit samples arrive in 32-bit I2S slots
     bits_per_sample: 32bit
     sample_rate: 48000
     mclk_multiple: 256
@@ -83,42 +79,80 @@ sendspin:
         format: "Sendspin pairing failed: %s"
         args: ["reason.c_str()"]
         level: WARN
+  source:
+    microphone:
+      microphone: line_in_adc
+      channels: [0, 1]
+      # PCM1808 is a 24-bit ADC; 16 halves the bandwidth
+      bits_per_sample: 24
+      gain_factor: 1
+    on_streaming_started:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: ON
+    on_streaming_stopped:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: OFF
 
-sendspin_source:
-  id: line_in_source
-  sendspin_id: sendspin_hub
-  microphone:
-    microphone: line_in_adc
-    channels: [0, 1]
-    # PCM1808 is a 24-bit ADC; 16 halves the bandwidth
-    bits_per_sample: 24
-    gain_factor: 1
-  codec: pcm
-  chunk_duration: 20ms
-  capture_buffer: 500ms
-  line_sense:
-    # Tune threshold to your source level
-    enabled: true
-    threshold: -60dB
-    hysteresis: 6dB
-    attack: 100ms
-    release: 2s
-  on_streaming_started:
-    - binary_sensor.template.publish:
-        id: line_in_streaming
-        state: ON
-  on_streaming_stopped:
-    - binary_sensor.template.publish:
-        id: line_in_streaming
-        state: OFF
-  on_signal_present:
-    - binary_sensor.template.publish:
-        id: line_in_signal
-        state: ON
-  on_signal_absent:
-    - binary_sensor.template.publish:
-        id: line_in_signal
-        state: OFF
+# Line sense: the input level decides whether Music Assistant sees a signal.
+# On at the "Line In Threshold", off 6 dB below it (hysteresis); 100 ms attack, 2 s release.
+globals:
+  - id: line_in_above
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+number:
+  - platform: template
+    id: line_in_threshold
+    name: "Line In Threshold"
+    icon: mdi:tune-vertical
+    entity_category: config
+    unit_of_measurement: dB
+    min_value: -90
+    max_value: -20
+    step: 1
+    initial_value: -60
+    optimistic: true
+    restore_value: true
+
+sensor:
+  # Keeps the ADC running so the level is measured even when nothing is streaming
+  - platform: sound_level
+    microphone:
+      microphone: line_in_adc
+      channels: [0, 1]
+      bits_per_sample: 16
+    passive: false
+    measurement_duration: 100ms
+    rms:
+      id: line_in_level_raw
+      internal: true
+      on_value:
+        - lambda: |-
+            const float threshold = id(line_in_threshold).state;
+            bool above = id(line_in_above);
+            if (!above && x >= threshold) {
+              above = true;
+            } else if (above && x < threshold - 6.0f) {
+              above = false;
+            } else {
+              return;
+            }
+            // Publish only on a change, so the attack/release timers are not restarted every 100 ms
+            id(line_in_above) = above;
+            id(line_in_signal).publish_state(above);
+
+  # Level for tuning the threshold, averaged so Home Assistant gets one value a second
+  - platform: copy
+    source_id: line_in_level_raw
+    name: "Line In Level"
+    icon: mdi:waveform
+    entity_category: diagnostic
+    filters:
+      - throttle_average: 1s
+
 
 binary_sensor:
   - platform: template
@@ -132,6 +166,17 @@ binary_sensor:
     name: "Line In Signal"
     icon: mdi:waveform
     entity_category: diagnostic
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 2s
+    on_press:
+      - sendspin.source.set_signal:
+          id: sendspin_hub
+          present: true
+    on_release:
+      - sendspin.source.set_signal:
+          id: sendspin_hub
+          present: false
 
 text_sensor:
   - platform: sendspin
