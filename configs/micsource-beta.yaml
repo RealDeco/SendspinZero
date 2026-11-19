@@ -1,17 +1,7 @@
-# Streams a microphone/line-in to Music Assistant as a Sendspin source.
-# BETA: uses the source role built into ESPHome's sendspin component (2026.11+), no external component.
-# Include it as a package; remove or comment out the package to build without the source role.
-# The device yaml keeps the Sendspin hub (id: sendspin_hub) and its pairing entities; this only adds the source.
-#
-# The microphone defaults to id: raw_microphone (as micsource.yaml). Point it elsewhere from the device yaml:
-#   substitutions:
-#     micsource_microphone: usb_mic
-
 substitutions:
   micsource_microphone: raw_microphone
 
 esphome:
-  # The sendspin source role first shipped in 2026.11.0
   min_version: 2026.11.0
   on_boot:
     priority: -100
@@ -19,15 +9,18 @@ esphome:
       - binary_sensor.template.publish:
           id: line_in_streaming
           state: OFF
+      - sendspin.source.set_signal:
+          id: sendspin_hub
+          present: true
 
 sendspin:
   id: sendspin_hub
-  # Only streams while Music Assistant uses the source
   source:
     microphone:
       microphone: ${micsource_microphone}
       channels: [0]
       bits_per_sample: 16
+      gain_factor: 1
     on_streaming_started:
       - binary_sensor.template.publish:
           id: line_in_streaming
