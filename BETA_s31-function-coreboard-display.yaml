@@ -3,9 +3,9 @@ substitutions:
   wakeup_sound: "popup" # (options are: popup, wake_word_triggered)
 
   va_microphone: usb_voice_mic # (options are: onboard_voice_mic, usb_voice_mic)
-  va_speaker: onboard_announcement_input # Voice replies and sounds (options are: usb_announcement_resampler, onboard_announcement_input)
+  va_speaker: usb_announcement_resampler # Voice replies and sounds (options are: usb_announcement_resampler, onboard_announcement_input)
   music_speaker: usb_media_resampler # Music (options are: usb_media_resampler, onboard_media_input)
-  micsource_microphone: usb_mic  # Used by the micsource-beta package
+  micsource_microphone: usb_mic  # Used by the micsource package
 
   # Voice assistant images and the fallback image when a track has no album art
   # (options are: AlbertQuackmore,Alfred,Alita,Astrobot,Buzz,Casita,Cybergirl,Dory,EVE,Eyes,Eyes2,GLaDOS,Girl1,Guy1,Guy2
@@ -72,20 +72,29 @@ substitutions:
   clock_style_photo: "5"
   clock_style_cyber: "6"
 
-# Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Uncomment to add it.
-#packages:
+# Optional add-ons. Uncomment "packages:" and the add-on(s) you want.
+packages:
+
+### Stream the card's mic/line-in to Music Assistant as a Sendspin source
 #  micsource:
 #    url: https://github.com/RealDeco/SendspinZero
 #    ref: main
 #    refresh: 1d
-#    files: [configs/micsource-beta.yaml]
+#    files: [configs/micsource.yaml]
+
+### LD2410C radar on GPIO35/37/39
+  ld2410:
+    url: https://github.com/RealDeco/SendspinZero
+    ref: main
+    refresh: 1d
+    files: [configs/ld2410.yaml]
 
 esphome:
   name: s31-function-coreboard
   # Also the player name Sendspin reports to Music Assistant
   friendly_name: S31 Function CoreBoard
   # usb_audio first shipped in 2026.11.0
-  min_version: 2026.11.0b1
+  min_version: 2026.11.0
   on_boot:
     - priority: -100
       then:
