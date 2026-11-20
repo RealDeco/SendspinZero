@@ -4,6 +4,9 @@
 # No data on the UART sensors? Swap tx_pin and rx_pin.
 # "Radar Screen Control" turns the screen (screen_backlight) on with presence on OUT and off after
 # "Radar Screen Off Delay" without it; uses ids from the display file, so include it only there.
+# "Radar Auto Join Group" lets the music follow presence: sendspin.switch joins the next playing group after
+# "Radar Group Join Delay" of presence and switches back to solo after "Radar Group Leave Delay" without it.
+# Meant for one playing group: with several, a switch can land in another group instead of back to solo.
 
 uart:
   - id: ld2410_uart
@@ -35,12 +38,24 @@ binary_sensor:
           then:
             - script.stop: radar_screen_off
             - light.turn_on: screen_backlight
+      - if:
+          condition:
+            switch.is_on: radar_auto_join
+          then:
+            - script.stop: radar_group_leave
+            - script.execute: radar_group_join
     on_release:
       - if:
           condition:
             switch.is_on: radar_screen_control
           then:
             - script.execute: radar_screen_off
+      - if:
+          condition:
+            switch.is_on: radar_auto_join
+          then:
+            - script.stop: radar_group_join
+            - script.execute: radar_group_leave
   # Presence from the UART frames
   - platform: ld2410
     has_target:
@@ -49,8 +64,6 @@ binary_sensor:
       name: "Radar Moving Target"
     has_still_target:
       name: "Radar Still Target"
-    out_pin_presence_status:
-      name: "Radar OUT Status"
 
 sensor:
   # Light and per-gate energy need the "Radar Engineering Mode" switch on
@@ -99,6 +112,22 @@ switch:
       - script.stop: radar_screen_off
       - light.turn_on: screen_backlight
 
+  # Music follows presence: join the playing group, back to solo when gone
+  - platform: template
+    id: radar_auto_join
+    name: "Radar Auto Join Group"
+    icon: mdi:speaker-multiple
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    # Turning it off leaves the player where it is
+    on_turn_off:
+      - script.stop: radar_group_join
+      - script.stop: radar_group_leave
+      - globals.set:
+          id: radar_auto_joined
+          value: "false"
+
 number:
   - platform: template
     id: radar_screen_off_delay
@@ -113,6 +142,39 @@ number:
     optimistic: true
     restore_value: true
 
+  - platform: template
+    id: radar_group_join_delay
+    name: "Radar Group Join Delay"
+    icon: mdi:timer-outline
+    entity_category: config
+    unit_of_measurement: s
+    min_value: 0
+    max_value: 60
+    step: 1
+    initial_value: 5
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: radar_group_leave_delay
+    name: "Radar Group Leave Delay"
+    icon: mdi:timer-outline
+    entity_category: config
+    unit_of_measurement: s
+    min_value: 0
+    max_value: 1800
+    step: 1
+    initial_value: 30
+    optimistic: true
+    restore_value: true
+
+globals:
+  # Set when radar_group_join switched groups, so leaving never undoes a group joined by hand
+  - id: radar_auto_joined
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
 script:
   # Restart mode: presence coming back cancels a pending turn-off
   - id: radar_screen_off
@@ -125,9 +187,44 @@ script:
             and:
               - not:
                   media_player.is_playing: usb_media_player
-              - not:
-                  voice_assistant.is_running:
+              # id(va).is_running(): the voice_assistant.is_running condition is also true while continuous
+              # mode ("In Home Assistant" wake word) is only armed, which would keep the screen on forever
+              - lambda: return !id(va).is_running();
       - light.turn_off: screen_backlight
+
+  # Presence for the join delay, then join the next playing group if this player is idle
+  - id: radar_group_join
+    mode: restart
+    then:
+      - delay: !lambda return id(radar_group_join_delay).state * 1000;
+      - if:
+          condition:
+            and:
+              - media_player.is_idle: sendspin_group_media_player
+              - lambda: return !id(va).is_running();
+          then:
+            - sendspin.switch:
+            - globals.set:
+                id: radar_auto_joined
+                value: "true"
+
+  # No presence for the leave delay: switch back to solo, but only out of a group joined above that is still
+  # active; an idle player (music stopped) just forgets it
+  - id: radar_group_leave
+    mode: restart
+    then:
+      - delay: !lambda return id(radar_group_leave_delay).state * 1000;
+      - if:
+          condition:
+            and:
+              - lambda: return id(radar_auto_joined);
+              - not:
+                  media_player.is_idle: sendspin_group_media_player
+          then:
+            - sendspin.switch:
+      - globals.set:
+          id: radar_auto_joined
+          value: "false"
 
 button:
   - platform: ld2410
