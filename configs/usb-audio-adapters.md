@@ -1,6 +1,6 @@
 # USB Audio Adapter Compatibility
 
-| Device | USB VID:PID | Mic / line in | Mic channels tested | Sample rates in test notes | USB identification | USB capture | USB playback | ESP-IDF override fix |
+| Device | USB VID:PID | Mic / line in | Mic channels tested | Mic Sample rates | USB identification | USB capture | USB playback | ESP-IDF override fix |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Fun Generation UA-202 | `08bb:29c2` | Stereo line in | 2 (1 OK) | 48 kHz | TI PCM2902C | 2 ch, 16-bit, up to 48 kHz | 2 ch, 16-bit, 32 / 44.1 / 48 kHz | Fix #1 needed |
 | Dongle 1 (black, two jacks) | `1b3f:2008` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | Generalplus USB Audio | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz (published dump for this USB ID) | No fix needed |
