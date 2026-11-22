@@ -1,0 +1,38 @@
+# Stereo version of micsource.yaml: streams channels 0 and 1, for a card with a real stereo line-in (e.g. the
+# UA-202). ${micsource_microphone} must be a 2-channel microphone (usb_audio with num_channels 2).
+# Cards that only fake stereo (one mic copied to both channels) gain nothing over micsource.yaml.
+esphome:
+  min_version: 2026.11.0
+  on_boot:
+    priority: -100
+    then:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: OFF
+      - sendspin.source.set_signal:
+          id: sendspin_hub
+          present: true
+
+sendspin:
+  id: sendspin_hub
+  source:
+    microphone:
+      microphone: ${micsource_microphone}
+      channels: [0, 1]
+      bits_per_sample: 16
+      gain_factor: 1
+    on_streaming_started:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: ON
+    on_streaming_stopped:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: OFF
+
+binary_sensor:
+  - platform: template
+    id: line_in_streaming
+    name: "Mic Source Streaming"
+    icon: mdi:microphone-message
+    entity_category: diagnostic
