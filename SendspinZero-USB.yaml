@@ -1,7 +1,6 @@
 substitutions:
   name: sendspinzero-usb
   friendly_name: SendspinZero-USB
-  micsource_microphone: usb_mic  # Used by the micsource package
 
   # The USB card's audio formats; the card must support them exactly, or the log lists what it does
   usb_sample_rate: "48000"  # Speaker, Hz: 44100 or 48000 (the resamplers and pipelines stop at 48000)
@@ -11,23 +10,27 @@ substitutions:
   usb_mic_channels: "2"  # Mic, 1 or 2 (some cards only offer 1 channel)
 
 # usb_audio supports UAC 1.0 only; a UAC 2.0 device is rejected
-# Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Comment out to remove it.
-packages:
-  micsource:
-    url: https://github.com/RealDeco/SendspinZero
-    ref: main
-    refresh: 1d
-    files: [configs/micsource.yaml]
+# The card's mic/line-in is a Sendspin source with line sense: Music Assistant sees a signal only while the
+# input level is above "Line In Threshold" (set it a few dB above "Line In Level" with the source silent).
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   # usb_audio first shipped in 2026.11.0
   min_version: 2026.11.0
-  name_add_mac_suffix: false
+  name_add_mac_suffix: true
   project:
     name: realdeco.zero_usb
     version: "2026.11.0"
+  on_boot:
+    priority: -100
+    then:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: OFF
+      - binary_sensor.template.publish:
+          id: line_in_signal
+          state: OFF
 
 esp32:
   variant: esp32s3
@@ -81,6 +84,63 @@ globals:
     restore_value: no
     initial_value: "false"
 
+  # Line sense: on at the "Line In Threshold", off 6 dB below it (hysteresis); 100 ms attack, 2 s release
+  - id: line_in_above
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+number:
+  - platform: template
+    id: line_in_threshold
+    name: "Line In Threshold"
+    icon: mdi:tune-vertical
+    entity_category: config
+    unit_of_measurement: dB
+    min_value: -90
+    max_value: -20
+    step: 1
+    mode: box
+    initial_value: -60
+    optimistic: true
+    restore_value: true
+
+sensor:
+  # Keeps the card's input running so the level is measured even when nothing is streaming
+  - platform: sound_level
+    microphone:
+      microphone: usb_mic
+      channels: [0]  # Mono; [0, 1] for a card with a real stereo line-in (needs usb_mic_channels "2")
+      bits_per_sample: 16
+    passive: false
+    measurement_duration: 100ms
+    rms:
+      id: line_in_level_raw
+      internal: true
+      on_value:
+        - lambda: |-
+            const float threshold = id(line_in_threshold).state;
+            bool above = id(line_in_above);
+            if (!above && x >= threshold) {
+              above = true;
+            } else if (above && x < threshold - 6.0f) {
+              above = false;
+            } else {
+              return;
+            }
+            // Publish only on a change, so the attack/release timers are not restarted every 100 ms
+            id(line_in_above) = above;
+            id(line_in_signal).publish_state(above);
+
+  # Level for tuning the threshold, averaged so Home Assistant gets one value a second
+  - platform: copy
+    source_id: line_in_level_raw
+    name: "Line In Level"
+    icon: mdi:waveform
+    entity_category: diagnostic
+    filters:
+      - throttle_average: 1s
+
 button:
   - platform: factory_reset
     id: factory_reset_btn
@@ -126,6 +186,29 @@ binary_sensor:
           - ON for at least 10s
         then:
           - button.press: factory_reset_btn
+
+  - platform: template
+    id: line_in_streaming
+    name: "Line In Streaming"
+    icon: mdi:audio-input-rca
+    entity_category: diagnostic
+
+  - platform: template
+    id: line_in_signal
+    name: "Line In Signal"
+    icon: mdi:waveform
+    entity_category: diagnostic
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 2s
+    on_press:
+      - sendspin.source.set_signal:
+          id: sendspin_hub
+          present: true
+    on_release:
+      - sendspin.source.set_signal:
+          id: sendspin_hub
+          present: false
 
 usb_audio:
   id: usb_audio_hub
@@ -173,6 +256,21 @@ sendspin:
         format: "Sendspin pairing failed: %s"
         args: ["reason.c_str()"]
         level: WARN
+  # The card's line-in, streamed to Music Assistant
+  source:
+    microphone:
+      microphone: usb_mic
+      channels: [0]  # Mono; [0, 1] for a card with a real stereo line-in (needs usb_mic_channels "2")
+      bits_per_sample: ${usb_mic_bits_per_sample}  # 16 or 24
+      gain_factor: 1
+    on_streaming_started:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: ON
+    on_streaming_stopped:
+      - binary_sensor.template.publish:
+          id: line_in_streaming
+          state: OFF
 
 audio_file:
   - id: ready_sound
