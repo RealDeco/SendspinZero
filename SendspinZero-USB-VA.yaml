@@ -33,7 +33,7 @@ esphome:
   friendly_name: ${friendly_name}
   # usb_audio first shipped in 2026.11.0
   min_version: 2026.11.0
-  name_add_mac_suffix: false
+  name_add_mac_suffix: true
   project:
     name: realdeco.zero_usb
     version: "2026.11.0"
