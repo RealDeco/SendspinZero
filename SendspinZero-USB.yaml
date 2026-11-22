@@ -3,37 +3,31 @@ substitutions:
   friendly_name: SendspinZero-USB
   micsource_microphone: usb_mic  # Used by the micsource package
 
-# Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Uncomment to add it.
-#packages:
-#  micsource:
-#    url: https://github.com/RealDeco/SendspinZero
-#    ref: main
-#    refresh: 1d
-#    files: [configs/micsource.yaml]
+  # The USB card's audio formats; the card must support them exactly, or the log lists what it does
+  usb_sample_rate: "48000"  # Speaker, Hz: 44100 or 48000 (the resamplers and pipelines stop at 48000)
+  usb_bits_per_sample: "24"  # Speaker, bits: 16 or 24 (also what Music Assistant sends)
+  usb_mic_sample_rate: "48000"  # Mic, Hz
+  usb_mic_bits_per_sample: "24"  # Mic, bits
+  usb_mic_channels: "2"  # Mic, 1 or 2 (some cards only offer 1 channel)
 
-# Optional wake word during music ("Wake word during music" switch, default off); music is ducked 20 dB while
-# the voice assistant runs. No echo cancellation: loud music near the mic means fewer detections.
-#
-# USB-only version: all audio through a USB audio card (its speaker and mic); no ES8311, onboard mic or amp.
-# USB audio card on the S3's native USB (GPIO19 D- / GPIO20 D+, the Zero's USB-C, via an OTG adapter).
-#   - usb_host takes over that port: no USB logs or Improv while it runs; logs go to UART0 (GPIO43/44), updates via OTA.
-#     To flash over USB again, unplug the card and hold BOOT while plugging in the cable.
-#   - The card needs 5 V on the USB-C VBUS: power the board from its 5V pin and check VBUS gets it.
-#   - Full-speed UAC 1.0 cards only.
+# usb_audio supports UAC 1.0 only; a UAC 2.0 device is rejected
+# Optional: stream the card's mic/line-in to Music Assistant as a Sendspin source. Comment out to remove it.
+packages:
+  micsource:
+    url: https://github.com/RealDeco/SendspinZero
+    ref: main
+    refresh: 1d
+    files: [configs/micsource.yaml]
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   # usb_audio first shipped in 2026.11.0
   min_version: 2026.11.0
-  name_add_mac_suffix: true
+  name_add_mac_suffix: false
   project:
     name: realdeco.zero_usb
     version: "2026.11.0"
-  on_boot:
-    - priority: -100
-      then:
-        - micro_wake_word.disable_model: stop  # Enabled state is saved; never boot with it on
 
 esp32:
   variant: esp32s3
@@ -46,21 +40,23 @@ esp32:
     sdkconfig_options:
       CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
       CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
-
-
+      CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE: "4096" #needed for fun generation ua202
 psram:
   mode: quad
   speed: 80MHz
 
 api:
   on_client_connected:
-    - script.execute: stop_wake_word
     - delay: 2000ms
     - lambda: |-
         if (!id(boot_sound_played)) {
           id(boot_sound_played) = true;
           if (id(startup_sound_switch).state) {
-            id(play_sound)->execute(true, std::string("ready_sound"));
+            id(speaker_media_player)
+              ->make_call()
+              .set_media_url("audio-file://ready_sound")
+              .set_announcement(true)
+              .perform();
           }
         }
 
@@ -69,7 +65,7 @@ ota:
     id: ota_esphome
 
 logger:
-  level: WARN
+  level: INFO  # Shows USB card connects/disconnects and, on a format mismatch, the formats the card supports
   hardware_uart: UART0  # USB-Serial-JTAG is gone once usb_host starts
 
 wifi:
@@ -80,11 +76,6 @@ improv_serial:
 captive_portal:
 
 globals:
-  - id: playing_internal_sound
-    type: bool
-    restore_value: no
-    initial_value: "false"
-
   - id: boot_sound_played
     type: bool
     restore_value: no
@@ -129,58 +120,30 @@ binary_sensor:
           - ON for at least 50ms
           - OFF for at least 50ms
         then:
-          - script.execute: reset_led
-          - if:
-              condition:
-                switch.is_on: timer_ringing
-              then:
-                - switch.turn_off: timer_ringing
-              else:
-                - if:
-                    condition:
-                      not:
-                        voice_assistant.is_running:
-                    then:
-                      - voice_assistant.start:
-                    else:
-                      - voice_assistant.stop:
+          - media_player.toggle: sendspin_group_media_player
 
       - timing:
           - ON for at least 10s
         then:
           - button.press: factory_reset_btn
 
-# usb_audio supports UAC 1.0 only; a UAC 2.0 device is rejected
 usb_audio:
   id: usb_audio_hub
 
 microphone:
-  # The card's mic/line-in; the card must support this exact format (on a mismatch the log lists what it does)
   - platform: usb_audio
     id: usb_mic
-    sample_rate: 48000
-    bits_per_sample: 16bit
-    num_channels: 1
-
-  # Wake word and voice assistant need 16 kHz
-  - platform: resampler
-    id: usb_voice_mic
-    microphone:
-      microphone: usb_mic
-      channels: [0]
-    sample_rate: 16000
+    sample_rate: ${usb_mic_sample_rate}
+    bits_per_sample: ${usb_mic_bits_per_sample}bit
+    num_channels: ${usb_mic_channels}
 
 speaker:
-  # The card must support this exact format. 48 kHz is verified on this card. usb_host_uac picks the LAST alt
-  # setting that lists the rate, and some cards (the S31's) then play at double speed; with such a card, set every
-  # 48000 below (speaker, resamplers, pipelines, Sendspin source) to 44100.
   - platform: usb_audio
     id: usb_speaker
-    sample_rate: 48000
-    bits_per_sample: 16bit
+    sample_rate: ${usb_sample_rate}
+    bits_per_sample: ${usb_bits_per_sample}bit
     num_channels: 2
 
-  # Announcements duck the music; mono announcements are played on both channels
   - platform: mixer
     id: usb_mixer
     output_speaker: usb_speaker
@@ -190,18 +153,17 @@ speaker:
       - id: usb_announcement_input
       - id: usb_media_input
 
-  # Bring every stream to the card's 48 kHz (the pipelines already ask for it, so usually a pass-through)
   - platform: resampler
     id: announcement_resampling_speaker
     output_speaker: usb_announcement_input
-    sample_rate: 48000
-    bits_per_sample: 16
+    sample_rate: ${usb_sample_rate}
+    bits_per_sample: ${usb_bits_per_sample}
 
   - platform: resampler
     id: media_resampling_speaker
     output_speaker: usb_media_input
-    sample_rate: 48000
-    bits_per_sample: 16
+    sample_rate: ${usb_sample_rate}
+    bits_per_sample: ${usb_bits_per_sample}
 
 sendspin:
   id: sendspin_hub
@@ -213,8 +175,6 @@ sendspin:
         level: WARN
 
 audio_file:
-  - id: timer_finished_sound
-    file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/timer_finished.flac
   - id: ready_sound
     file: https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/popup.flac
 
@@ -228,7 +188,8 @@ media_source:
   - platform: sendspin
     id: sendspin_media_source
     static_delay_adjustable: true
-    sample_rate: 48000  # Match the card, so Music Assistant sends 48 kHz and the media resampler passes it through
+    sample_rate: ${usb_sample_rate}
+    bits_per_sample: ${usb_bits_per_sample}
     codecs: [flac, pcm]  # Opus left out to save flash
 
 media_player:
@@ -242,7 +203,7 @@ media_player:
 
     announcement_pipeline:
       format: FLAC
-      sample_rate: 48000
+      sample_rate: ${usb_sample_rate}
       num_channels: 1
       speaker: announcement_resampling_speaker
       sources:
@@ -251,7 +212,7 @@ media_player:
 
     media_pipeline:
       format: FLAC
-      sample_rate: 48000
+      sample_rate: ${usb_sample_rate}
       num_channels: 2
       speaker: media_resampling_speaker
       sources:
@@ -260,266 +221,32 @@ media_player:
     volume_increment: 0.05
 
     on_announcement:
-      - script.stop: mp_idle_debounce
-      - mixer_speaker.apply_ducking:  # Lower music under announcements
+      - mixer_speaker.apply_ducking:
           id: usb_media_input
           decibel_reduction: 20
           duration: 0.0s
-      # On device the wake word keeps running, so "stop" can be heard
-      - if:
-          condition:
-            and:
-              - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
-              - microphone.is_capturing: usb_voice_mic
-          then:
-            - script.execute: stop_wake_word
-            - wait_until:
-                - not:
-                    voice_assistant.is_running:
 
     on_play:
       - script.stop: mp_idle_debounce
-      - if:
-          condition:
-            and:
-              - microphone.is_capturing: usb_voice_mic
-              - switch.is_off: wake_word_during_music
-          then:
-            - script.execute: stop_wake_word
-            - if:
-                condition:
-                  - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
-                then:
-                  - wait_until:
-                      condition:
-                        - not:
-                            voice_assistant.is_running:
       - script.execute: music_led
-      - if:
-          condition:
-            lambda: 'return id(playing_internal_sound);'
-          then:
-            - lambda: 'id(playing_internal_sound) = false;'
 
     on_idle:
       - script.execute: mp_idle_debounce
 
-    # Only URL playback pauses (Sendspin goes idle instead); paused counts as idle for the wake word
     on_pause:
       - script.execute: mp_idle_debounce
 
     on_state:
-      # Not during a voice session (e.g. after the wake sound): voice_assistant on_end brings the music back.
-      # id(va).is_running(), not the voice_assistant.is_running condition, which is also true while continuous
-      # mode ("In Home Assistant" wake word) is only armed.
       - if:
           condition:
-            and:
-              - not:
-                  media_player.is_announcing:
-                    id: speaker_media_player
-              - lambda: return !id(va).is_running();
+            not:
+              media_player.is_announcing:
+                id: speaker_media_player
           then:
-            - mixer_speaker.apply_ducking:  # Bring music back after announcements
+            - mixer_speaker.apply_ducking:
                 id: usb_media_input
                 decibel_reduction: 0
                 duration: 1.0s
-
-micro_wake_word:
-  id: mww
-  microphone: usb_voice_mic
-  stop_after_detection: false  # Keep listening during replies so "stop" can be heard
-  ring_buffer_duration: 800ms  # Per esphome#20942, ~25.6 KB; stops "Not enough free bytes in ring buffer"
-  prefer_internal_ram: true  # Model arena in internal RAM: faster inference, keeps it off the PSRAM bus Sendspin uses
-  models:
-    - okay_nabu
-    # Only enabled while a TTS reply plays or a timer rings
-    - model: https://github.com/kahrendt/microWakeWord/releases/download/stop/stop.json
-      id: stop
-      internal: true
-  on_wake_word_detected:
-    - if:
-        condition:
-          switch.is_on: timer_ringing
-        then:
-          - switch.turn_off: timer_ringing
-        else:
-          - if:
-              condition:
-                voice_assistant.is_running:
-              then:
-                - voice_assistant.stop:
-              else:
-                - if:
-                    condition:
-                      media_player.is_announcing:
-                        id: speaker_media_player
-                    then:
-                      - media_player.stop:
-                          announcement: true
-                          id: speaker_media_player
-                    else:
-                      - if:
-                          condition:
-                            switch.is_on: wake_word_sound_switch
-                          then:
-                            - lambda: 'id(play_sound)->execute(false, std::string("ready_sound"));'
-                      - voice_assistant.start:
-                          wake_word: !lambda return wake_word;
-
-voice_assistant:
-  id: va
-  microphone: usb_voice_mic
-  media_player: speaker_media_player
-  micro_wake_word: mww
-  noise_suppression_level: 2
-  auto_gain: 31dBFS
-  volume_multiplier: 2.0
-  # Lower the music while you speak and while the reply plays
-  on_start:
-    - mixer_speaker.apply_ducking:
-        id: usb_media_input
-        decibel_reduction: 20
-        duration: 0.0s
-  on_listening:
-    - if:
-        condition:
-          - switch.is_on: use_listen_light
-        then:
-          - light.turn_on:
-              id: led
-              blue: 100%
-              red: 0%
-              green: 0%
-              effect: "Slow Pulse"
-  on_stt_vad_end:
-    - if:
-        condition:
-          - switch.is_on: use_listen_light
-        then:
-          - light.turn_on:
-              id: led
-              blue: 100%
-              red: 0%
-              green: 0%
-              effect: "Fast Pulse"
-  on_tts_start:
-    - script.execute: activate_stop_word_once
-    - if:
-        condition:
-          - switch.is_on: use_listen_light
-        then:
-          - light.turn_on:
-              id: led
-              blue: 100%
-              red: 0%
-              green: 0%
-              brightness: 100%
-              effect: none
-
-  on_end:
-    # on_end fires when Home Assistant ends the pipeline, often before the reply starts playing. The VA itself
-    # stays out of IDLE until the player reports its reply finished; is_running() ignores continuous mode,
-    # unlike the voice_assistant.is_running condition.
-    - wait_until:
-        condition:
-          lambda: return !id(va).is_running();
-        timeout: 60s
-    - wait_until:
-        condition:
-          media_player.is_announcing:
-            id: speaker_media_player
-        timeout: 0.5s
-
-    - wait_until:
-        - and:
-            - not:
-                media_player.is_announcing:
-                  id: speaker_media_player
-            - not:
-                speaker.is_playing:
-                  id: announcement_resampling_speaker
-    - mixer_speaker.apply_ducking:
-        id: usb_media_input
-        decibel_reduction: 0
-        duration: 1.0s
-    # Music still playing goes back to its music light
-    - if:
-        condition:
-          media_player.is_playing: speaker_media_player
-        then:
-          - script.execute: music_led
-        else:
-          - script.execute: reset_led
-    # During music the wake word only comes back when "Wake word during music" is on
-    - if:
-        condition:
-          and:
-            - lambda: return id(wake_word_engine_location).current_option() == "On device";
-            - or:
-                - switch.is_on: wake_word_during_music
-                - not:
-                    media_player.is_playing: speaker_media_player
-        then:
-          - lambda: id(va).set_use_wake_word(false);
-          - script.execute: start_wake_word
-
-  on_error:
-    - mixer_speaker.apply_ducking:
-        id: usb_media_input
-        decibel_reduction: 0
-        duration: 1.0s
-    - if:
-        condition:
-          switch.is_off: mute
-        then:
-          - script.execute: start_wake_word
-    - if:
-        condition:
-          - switch.is_on: use_listen_light
-        then:
-          - light.turn_on:
-              id: led
-              red: 100%
-              green: 0%
-              blue: 0%
-              brightness: 100%
-              effect: none
-    - delay: 2s
-    - script.execute: reset_led
-
-  on_client_connected:
-    - script.execute: start_wake_word
-
-  on_client_disconnected:
-    - script.execute: stop_wake_word
-
-  on_timer_finished:
-    - switch.turn_on: timer_ringing
-    - if:
-        condition:
-          - switch.is_on: use_listen_light
-        then:
-          - light.turn_on:
-              id: led
-              red: 0%
-              green: 100%
-              blue: 0%
-              brightness: 100%
-              effect: "Fast Pulse"
-    - wait_until:
-        media_player.is_announcing:
-          id: speaker_media_player
-    - if:
-        condition:
-          - switch.is_on: use_listen_light
-        then:
-          - light.turn_on:
-              id: led
-              blue: 0%
-              red: 100%
-              green: 0%
-              effect: "Fast Pulse"
 
 script:
   - id: mp_idle_debounce
@@ -528,16 +255,12 @@ script:
       - delay: 1s
       - if:
           condition:
-            and:
-              - or:
-                  - media_player.is_idle: speaker_media_player
-                  - media_player.is_paused: speaker_media_player
-              - not:
-                  voice_assistant.is_running:
+            or:
+              - media_player.is_idle: speaker_media_player
+              - media_player.is_paused: speaker_media_player
           then:
-            - script.execute: reset_led
-            - script.execute: start_wake_word
-  # While music plays: green slow pulse, or the normal idle light when "Use music light" is off
+            - light.turn_off: led
+
   - id: music_led
     then:
       - if:
@@ -551,149 +274,7 @@ script:
                 green: 100%
                 effect: "Slow Pulse"
           else:
-            - script.execute: reset_led
-
-  - id: reset_led
-    then:
-      - if:
-          condition:
-            - lambda: return id(wake_word_engine_location).current_option() == "On device";
-            - switch.is_on: use_listen_light
-          then:
-            - light.turn_on:
-                id: led
-                red: 100%
-                green: 89%
-                blue: 71%
-                brightness: 30%
-                effect: none
-          else:
-            - if:
-                condition:
-                  - lambda: return id(wake_word_engine_location).current_option() != "On device";
-                  - switch.is_on: use_listen_light
-                then:
-                  - light.turn_on:
-                      id: led
-                      red: 0%
-                      green: 100%
-                      blue: 100%
-                      brightness: 30%
-                      effect: none
-                else:
-                  - light.turn_off: led
-  - id: start_wake_word
-    then:
-      - if:
-          condition:
-            and:
-              - switch.is_off: mute
-              - not:
-                  - voice_assistant.is_running:
-              - not:
-                  - micro_wake_word.is_running:
-              - lambda: return id(wake_word_engine_location).current_option() == "On device";
-          then:
-            - lambda: id(va).set_use_wake_word(false);
-            - micro_wake_word.start:
-      - if:
-          condition:
-            and:
-              - switch.is_off: mute
-              - not:
-                  - voice_assistant.is_running:
-              - lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
-          then:
-            - lambda: id(va).set_use_wake_word(true);
-            - voice_assistant.start_continuous:
-  - id: stop_wake_word
-    then:
-      - if:
-          condition:
-            lambda: return id(wake_word_engine_location).current_option() == "In Home Assistant";
-          then:
-            - lambda: id(va).set_use_wake_word(false);
-            - voice_assistant.stop:
-      - if:
-          condition:
-            lambda: return id(wake_word_engine_location).current_option() == "On device";
-          then:
-            - micro_wake_word.stop:
-  - id: activate_stop_word_once
-    mode: restart
-    then:
-      - wait_until:
-          condition:
-            media_player.is_announcing:
-              id: speaker_media_player
-          timeout: 5s
-      - delay: 1s  # Skip the start of the reply
-      - if:
-          condition:
-            switch.is_off: timer_ringing
-          then:
-            - micro_wake_word.enable_model: stop
-      - wait_until:
-          not:
-            media_player.is_announcing:
-              id: speaker_media_player
-      - if:
-          condition:
-            switch.is_off: timer_ringing
-          then:
-            - micro_wake_word.disable_model: stop
-  - id: ring_timer
-    then:
-      - script.execute: enable_repeat_one
-      - script.execute:
-          id: play_sound
-          priority: true
-          sound_file: "timer_finished_sound"
-  # Script executed when the timer is ringing, to repeat the timer finished sound.
-  - id: enable_repeat_one
-    then:
-      - media_player.repeat_one:
-          id: speaker_media_player
-          announcement: true
-      # Turn on the repeat mode and pause for 500 ms between playlist items/repeats
-      - speaker_source.set_playlist_delay:
-          id: speaker_media_player
-          pipeline: announcement
-          delay: 500ms
-
-  # Script execute when the timer is done ringing, to disable repeat mode.
-  - id: disable_repeat
-    then:
-      # Turn off the repeat mode and pause for 0 ms between playlist items/repeats
-      - media_player.repeat_off:
-          id: speaker_media_player
-          announcement: true
-      - speaker_source.set_playlist_delay:
-          id: speaker_media_player
-          pipeline: announcement
-          delay: 0ms
-  - id: play_sound
-    parameters:
-      priority: bool
-      sound_file: string
-    then:
-      - lambda: |-
-          id(playing_internal_sound) = true;
-      - if:
-          condition:
-            lambda: return priority;
-          then:
-            - media_player.stop:
-                id: speaker_media_player
-                announcement: true
-      - lambda: |-
-          if ( (id(speaker_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING ) || priority) {
-            id(speaker_media_player)
-              ->make_call()
-              .set_media_url("audio-file://" + sound_file)
-              .set_announcement(true)
-              .perform();
-          }
+            - light.turn_off: led
 
 switch:
   - platform: template
@@ -703,23 +284,7 @@ switch:
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
-  - platform: template
-    id: wake_word_sound_switch
-    name: Wake word sound
-    icon: "mdi:ear-hearing"
-    entity_category: config
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-  - platform: template
-    name: Use listen light
-    id: use_listen_light
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-    entity_category: config
-    on_turn_on:
-      - script.execute: reset_led
-    on_turn_off:
-      - script.execute: reset_led
+
   - platform: template
     name: Use music light
     id: use_music_light
@@ -734,96 +299,13 @@ switch:
           then:
             - script.execute: music_led
     on_turn_off:
-      - if:
-          condition:
-            media_player.is_playing: speaker_media_player
-          then:
-            - script.execute: music_led
-  # Keep the wake word running while music plays (no echo cancellation; default off)
-  - platform: template
-    name: Wake word during music
-    id: wake_word_during_music
-    icon: "mdi:microphone-message"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    entity_category: config
-    on_turn_on:
-      - if:
-          condition:
-            media_player.is_playing: speaker_media_player
-          then:
-            - script.execute: start_wake_word
-    on_turn_off:
-      - if:
-          condition:
-            and:
-              - media_player.is_playing: speaker_media_player
-              - not:
-                  voice_assistant.is_running:
-          then:
-            - script.execute: stop_wake_word
-  - platform: template
-    name: Mute
-    id: mute
-    icon: "mdi:microphone-off"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    entity_category: config
-    on_turn_off:
-      - microphone.unmute: usb_voice_mic
-      - script.execute: start_wake_word
-    on_turn_on:
-      - script.execute: stop_wake_word
-      - microphone.mute: usb_voice_mic
-
-  - platform: template
-    id: timer_ringing
-    optimistic: true
-    internal: true
-    restore_mode: ALWAYS_OFF
-    on_turn_off:
-      - micro_wake_word.disable_model: stop
-      - script.execute: disable_repeat
-      - if:
-          condition:
-            media_player.is_announcing:
-              id: speaker_media_player
-          then:
-            media_player.stop:
-              announcement: true
-              id: speaker_media_player
-    on_turn_on:
-      - micro_wake_word.enable_model: stop
-      - script.execute: ring_timer
-      - delay: 15min
-      - switch.turn_off: timer_ringing
+      - light.turn_off: led
 
   - platform: sendspin
     id: sendspin_unpaired_access
     type: unpaired_access
     name: "Sendspin Unpaired Access"
     restore_mode: RESTORE_DEFAULT_ON
-
-select:
-  - platform: template
-    entity_category: config
-    name: Wake word engine location
-    id: wake_word_engine_location
-    icon: "mdi:account-voice"
-    optimistic: true
-    restore_value: true
-    options:
-      - In Home Assistant
-      - On device
-    initial_option: On device
-    on_value:
-      - script.execute: stop_wake_word
-      - delay: 500ms
-      - if:
-          condition:
-            switch.is_off: mute
-          then:
-            - script.execute: start_wake_word
 
 light:
   - platform: esp32_rmt_led_strip
@@ -841,11 +323,5 @@ light:
           name: "Slow Pulse"
           transition_length: 250ms
           update_interval: 250ms
-          min_brightness: 50%
-          max_brightness: 100%
-      - pulse:
-          name: "Fast Pulse"
-          transition_length: 100ms
-          update_interval: 100ms
           min_brightness: 50%
           max_brightness: 100%
