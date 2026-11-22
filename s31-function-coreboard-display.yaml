@@ -5,7 +5,17 @@ substitutions:
   va_microphone: usb_voice_mic # (options are: onboard_voice_mic, usb_voice_mic)
   va_speaker: usb_announcement_resampler # Voice replies and sounds (options are: usb_announcement_resampler, onboard_announcement_input)
   music_speaker: usb_media_resampler # Music (options are: usb_media_resampler, onboard_media_input)
-  micsource_microphone: usb_mic  # Used by the micsource package
+  micsource_microphone: usb_mic  # Used by the micsource package (options are: onboard_mic, usb_mic)
+
+  # The USB card's audio formats; the card must support them exactly, or the log lists what it does
+  usb_sample_rate: "48000"  # Speaker, Hz: 44100 or 48000 (the resamplers stop at 48000)
+  usb_bits_per_sample: "16"  # Speaker, bits (e.g. 16 or 24)
+  usb_mic_sample_rate: "48000"  # Mic, Hz
+  usb_mic_bits_per_sample: "16"  # Mic, bits
+  usb_mic_channels: "2"  # Mic, 1 or 2 (some cards only offer stereo; channel 0 is used)
+  # Bits Music Assistant sends and the audio runs at before the mixers (always 48 kHz): 16 or 24.
+  # The onboard speaker always plays 16-bit; its mixer converts.
+  stream_bits_per_sample: "16"
 
   # Voice assistant images and the fallback image when a track has no album art
   # (options are: AlbertQuackmore,Alfred,Alita,Astrobot,Buzz,Casita,Cybergirl,Dory,EVE,Eyes,Eyes2,GLaDOS,Girl1,Guy1,Guy2
@@ -76,18 +86,18 @@ substitutions:
 packages:
 
 ### Stream the card's mic/line-in to Music Assistant as a Sendspin source
-#  micsource:
-#    url: https://github.com/RealDeco/SendspinZero
-#    ref: main
-#    refresh: 1d
-#    files: [configs/micsource.yaml]
-
-### LD2410C radar on GPIO35/37/39
-  ld2410:
+  micsource:
     url: https://github.com/RealDeco/SendspinZero
     ref: main
-    refresh: 1d
-    files: [configs/ld2410.yaml]
+    refresh: 0s
+    files: [configs/micsource-stereo.yaml] #use micsource.yaml if mono mic, micsource-stereo.yaml if stereo
+
+### LD2410C radar on GPIO35/37/39
+#  ld2410:
+#    url: https://github.com/RealDeco/SendspinZero
+#    ref: main
+#    refresh: 0s
+#    files: [configs/ld2410.yaml]
 
 esphome:
   name: s31-function-coreboard
@@ -146,6 +156,8 @@ esp32:
     sdkconfig_options:
       # Octal PSRAM holds MPLL at 400 MHz, which cannot be divided down to RGMII's 125 MHz; use the Audio PLL
       CONFIG_ETH_EMAC_RGMII_TX_CLK_SRC_APLL: y
+      CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE: "4096" #needed for fun generation 
+      CONFIG_USB_HOST_HW_BUFFER_BIAS_PERIODIC_OUT: y #needed for cheap usb-c dongle
   flash_size: 16MB
   # Ethernet setup blocks ~4.8 s at boot; with the display's setup on top, the default 5 s trips the task watchdog
   watchdog_timeout: 15s
@@ -420,14 +432,14 @@ light:
           name: "Slow Pulse"
           transition_length: 250ms
           update_interval: 250ms
-          min_brightness: 50%
-          max_brightness: 100%
+          min_brightness: 20%
+          max_brightness: 40%
       - pulse:
           name: "Fast Pulse"
           transition_length: 100ms
           update_interval: 100ms
-          min_brightness: 50%
-          max_brightness: 100%
+          min_brightness: 20%
+          max_brightness: 40%
 
   # Clock colours, set from Home Assistant. 1: time and temperature, 2: date and weather icon,
   # 3: weather line, rooms clock and analog hands, 4: Cyberclock text
@@ -631,12 +643,12 @@ usb_audio:
 
 speaker:
   # The dongle must support this exact format; on a mismatch the log lists the formats it does support.
-  # TEST 48 kHz: usb_host_uac picks the LAST alt setting that lists the rate; this card's 48 kHz-only alt 5
-  # played at double speed before. If it still does, set this and the two USB resamplers back to 44100.
+  # usb_host_uac picks the LAST alt setting that lists the rate; a card that plays at double speed at
+  # 48 kHz needs usb_sample_rate at the top set to 44100.
   - platform: usb_audio
     id: usb_speaker
-    sample_rate: 48000
-    bits_per_sample: 16bit
+    sample_rate: ${usb_sample_rate}
+    bits_per_sample: ${usb_bits_per_sample}bit
     num_channels: 2
 
   # Onboard speaker (J9) via the ES8311 DAC; stereo in, the codec plays the left slot (as waveshare_3.5.yaml)
@@ -671,40 +683,41 @@ speaker:
       - id: onboard_announcement_input
       - id: onboard_media_input
 
-  # The USB branches bring the audio to the dongle's rate (a pass-through at 48 kHz)
+  # The USB branches bring the 48 kHz audio to the dongle's format (a pass-through at 48000/16)
   - platform: resampler
     id: usb_announcement_resampler
     output_speaker: usb_announcement_input
-    sample_rate: 48000
-    bits_per_sample: 16
+    sample_rate: ${usb_sample_rate}
+    bits_per_sample: ${usb_bits_per_sample}
 
   - platform: resampler
     id: usb_media_resampler
     output_speaker: usb_media_input
-    sample_rate: 48000
-    bits_per_sample: 16
+    sample_rate: ${usb_sample_rate}
+    bits_per_sample: ${usb_bits_per_sample}
 
-  # Bring every stream to 48 kHz, then on to the output picked by ${va_speaker} / ${music_speaker}.
+  # Bring every stream to 48 kHz and ${stream_bits_per_sample} bits, then on to the output picked by
+  # ${va_speaker} / ${music_speaker}.
   # Voice is mono; the mixers turn it into stereo.
   - platform: resampler
     id: va_format_resampler
     output_speaker: ${va_speaker}
     sample_rate: 48000
-    bits_per_sample: 16
+    bits_per_sample: ${stream_bits_per_sample}
 
   - platform: resampler
     id: media_resampling_speaker
     output_speaker: ${music_speaker}
     sample_rate: 48000
-    bits_per_sample: 16
+    bits_per_sample: ${stream_bits_per_sample}
 
 microphone:
   # The dongle's mic/line-in, streamed to Music Assistant; same exact-format rule as the speaker
   - platform: usb_audio
     id: usb_mic
-    sample_rate: 48000
-    bits_per_sample: 16bit
-    num_channels: 1
+    sample_rate: ${usb_mic_sample_rate}
+    bits_per_sample: ${usb_mic_bits_per_sample}bit
+    num_channels: ${usb_mic_channels}
 
   # Onboard electret mic via the ES8311 ADC
   - platform: i2s_audio
@@ -916,6 +929,7 @@ media_source:
   - platform: sendspin
     id: sendspin_source
     static_delay_adjustable: true
+    bits_per_sample: ${stream_bits_per_sample}
 
 media_player:
   - platform: sendspin
