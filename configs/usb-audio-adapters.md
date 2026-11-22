@@ -17,6 +17,7 @@ Add the relevant setting under `esp32.framework.sdkconfig_options`.
 | #1 | `CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE: "4096"` |
 | #2 | `CONFIG_USB_HOST_HW_BUFFER_BIAS_PERIODIC_OUT: y` |
 
+Fix #2 only works on S31, not S3.
 
 <img width="300" alt="f6ecbb18-b2a6-4bdb-9260-e83e32ec90fe" src="https://github.com/user-attachments/assets/0226ea84-872c-4963-924d-2a53c0ac5d6c" />
 
