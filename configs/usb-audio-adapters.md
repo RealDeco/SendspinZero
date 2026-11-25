@@ -6,7 +6,7 @@
 | Dongle 1 (black, two jacks) | `1b3f:2008` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | Generalplus USB Audio | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz (published dump for this USB ID) | No fix needed |
 | Dongle 2 (transparent) | `001f:0b21` | Mono mic | 1 (2 not OK) | 48 kHz | Bluetrum AB13X | 1 ch, 48 kHz (bit depth unverified) | 2 ch, 48 kHz reported on one variant | without fix #2 on S3 |
 | Dongle 3 (one jack on cable) | `0666:0880` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | SPACETOUCH USB Audio | 1 ch, 16-bit, 44.1 / 48 kHz | Playback tested on S31 (full format list unverified) | Fix #2 needed |
-| Dongle 4 (Creative Play! 3) | `041e:324d` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | Sound Blaster Play! 3 | 1 ch, 16/24-bit, 44.1 / 48 kHz | 2 ch, 16/24-bit, 44.1 / 48 / 96kHz Playback tested on S31| Fix #2 needed |
+| Dongle 4 (Creative Play! 3) | `041e:324d` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | Sound Blaster Play! 3 | 1 ch, 16/24-bit, 44.1 / 48 kHz | 2 ch, 16/24-bit, 44.1 / 48 / 96kHz Playback tested on S31| No fix needed |
 
 ## ESP-IDF overrides
 
