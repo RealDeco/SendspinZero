@@ -7,6 +7,7 @@
 | Dongle 2 (transparent) | `001f:0b21` | Mono mic | 1 (2 not OK) | 48 kHz | Bluetrum AB13X | 1 ch, 48 kHz (bit depth unverified) | 2 ch, 48 kHz reported on one variant | without fix #2 on S3 |
 | Dongle 3 (one jack on cable) | `0666:0880` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | SPACETOUCH USB Audio | 1 ch, 16-bit, 44.1 / 48 kHz | Playback tested on S31 (full format list unverified) | Fix #2 needed |
 | Dongle 4 (Creative Play! 3) | `041e:324d` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | Sound Blaster Play! 3 | 1 ch, 16/24-bit, 44.1 / 48 kHz | 2 ch, 16/24-bit, 44.1 / 48 / 96kHz Playback tested on S31| No fix needed |
+| Dongle 5 (One jack on cable) | `0666:0880` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | SPACETOUCH | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | Fix #2 needed |
 
 ## ESP-IDF overrides
 
@@ -41,3 +42,5 @@ Add the relevant setting under `esp32.framework.sdkconfig_options`.
 <img width="300" alt="993bf435-8d90-4a2b-bacf-6fb1eb3dd527" src="https://github.com/user-attachments/assets/bd460323-ee13-4a84-a185-c212610a9b85" />
 
 <img width="300" alt="0e999505-ccaf-4d93-9b46-7ea6f3d08dba" src="https://github.com/user-attachments/assets/64e15d7f-8e0c-4ba7-bd15-b9f6b4542a6b" />
+
+<img width="300" alt="93800e9a-4475-43db-83a1-08c08af2f8bc" src="https://github.com/user-attachments/assets/28e3a1e1-0b7d-4795-9469-b334c81c60f8" />
