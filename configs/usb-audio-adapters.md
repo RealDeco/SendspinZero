@@ -17,21 +17,20 @@ Add the relevant setting under `esp32.framework.sdkconfig_options`.
 | #1 | `CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE: "4096"` |
 | #2 | `CONFIG_USB_HOST_HW_BUFFER_BIAS_PERIODIC_OUT: y` |
 
-  ### Fix #2 and the ESP32-S3: speaker or mic, not both 
-    
-  Some cards (Dongle 3, Sound Blaster Play! 3) declare a much larger USB packet for playback than they
-  actually use (600 bytes, while 48 kHz / 16-bit stereo needs about 196). ESP-IDF reserves USB buffer
-  memory (FIFO) for the declared size, so these cards need fix #2 to play at all.
-    
-  The ESP32-S3 has too little USB FIFO to hold that 600-byte playback buffer and the 2-channel mic stream
-  at the same time. With fix #2 and a 2-channel mic, ESPHome stops the build with *"The requested USB packets
-  don't fit the FIFO split..."*. On the S3 you have to choose:
+  ### Fix #2 and the ESP32-S3: speaker or mic, not both
   
-  - **Speaker only:** keep fix #2 and leave the mic out (or use 1 channel, which these cards reject, so the
-    mic doesn't work).
-  - **Mic and speaker:** use a card that doesn't need fix #2 (see the table).
+  Some cards (like Dongle 3) declare a much larger USB packet for playback than they actually use (600 bytes,
+  while 48 kHz / 16-bit stereo needs about 196). ESP-IDF reserves USB buffer memory (FIFO) for the declared
+  size, so these cards need fix #2 to play at all.
   
-  The ESP32-P4 and S31 have enough FIFO for both.
+  The ESP32-S3 has too little USB FIFO to hold that 600-byte playback buffer and a 2-channel mic stream at
+  the same time. With fix #2 and the mic at 2 channels, ESPHome stops the build with *"The requested USB
+  packets don't fit the FIFO split..."*. So on the S3, a card that needs fix #2 is **speaker only**: set the
+  mic to 1 channel (`usb_mic_channels: "1"`) or remove the mic. The build then passes and the speaker works,
+  but the mic won't, because these cards only send 2 channels.
+  
+  The ESP32-P4 and S31 have enough FIFO for both. On the S3, pick a card that doesn't need fix #2 if you want
+  the mic too. Fix #1 is fine (the UA-202 does both on the S3).
 
 <img width="300" alt="f6ecbb18-b2a6-4bdb-9260-e83e32ec90fe" src="https://github.com/user-attachments/assets/0226ea84-872c-4963-924d-2a53c0ac5d6c" />
 
