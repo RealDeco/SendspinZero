@@ -7,7 +7,11 @@
 | Dongle 2 (transparent) | `001f:0b21` | Mono mic | 1 (2 not OK) | 48 kHz | Bluetrum AB13X | 1 ch, 48 kHz (bit depth unverified) | 2 ch, 48 kHz reported on one variant | without fix #2 on S3 |
 | Dongle 3 (one jack on cable) | `0666:0880` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | SPACETOUCH USB Audio | 1 ch, 16-bit, 44.1 / 48 kHz | Playback tested on S31 (full format list unverified) | Fix #2 needed |
 | Dongle 4 (Creative Play! 3) | `041e:324d` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | Sound Blaster Play! 3 | 1 ch, 16/24-bit, 44.1 / 48 kHz | 2 ch, 16/24-bit, 44.1 / 48 / 96kHz Playback tested on S31| No fix needed |
-| Dongle 5 (One jack on cable) | `0666:0880` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | SPACETOUCH | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | Fix #2 needed |
+| Dongle 5 (One jack on cable USB-C) | `0666:0880` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | SPACETOUCH | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | Fix #2 needed |
+| Dongle 6 (White dongle) | `001f:0b21` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | Generic | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | No fix needed  |
+| Dongle 7 (black and white, two jacks) | `1b3f:2008` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | GeneralPlus | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | No fix needed |
+| Dongle 8 (One jack on cable) | `3302:20c1` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | TTGK Technology | 1 ch, 16/24-bit, 44.1 / 48 kHz | 2 ch, 16/24/32-bit, 44.1/48/96 kHz | No fix needed |
+
 
 ## ESP-IDF overrides
 
@@ -44,3 +48,11 @@ Add the relevant setting under `esp32.framework.sdkconfig_options`.
 <img width="300" alt="0e999505-ccaf-4d93-9b46-7ea6f3d08dba" src="https://github.com/user-attachments/assets/64e15d7f-8e0c-4ba7-bd15-b9f6b4542a6b" />
 
 <img width="300" alt="93800e9a-4475-43db-83a1-08c08af2f8bc" src="https://github.com/user-attachments/assets/28e3a1e1-0b7d-4795-9469-b334c81c60f8" />
+
+
+
+<img width="300" alt="8a27dbd5-ea2d-44af-b85f-f8ea3ea6605b" src="https://github.com/user-attachments/assets/d4f14e8b-0076-4a72-b60a-57ac85c415fe" />
+
+<img width="300" alt="a14a3f2c-7f0e-44bd-89dd-48df5fb8b367" src="https://github.com/user-attachments/assets/00f274ca-2e68-43c8-8873-ce0fa230b2f6" />
+
+<img width="300" alt="9dd2ef27-4cc2-4849-bb5d-c89844ab5d0d" src="https://github.com/user-attachments/assets/d96c30a5-c96c-46f4-b423-e179a68a9feb" />
