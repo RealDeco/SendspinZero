@@ -10,7 +10,7 @@
 | Dongle 5 (One jack on cable USB-C) | `0666:0880` | Mono mic | 2 (1 not OK) | 44.1 / 48 kHz | SPACETOUCH | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | Fix #2 needed |
 | Dongle 6 (White dongle) | `001f:0b21` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | Generic | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | No fix needed  |
 | Dongle 7 (black and white, two jacks) | `1b3f:2008` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | GeneralPlus | 1 ch, 16-bit, 44.1 / 48 kHz | 2 ch, 16-bit, 44.1 / 48 kHz | No fix needed |
-| Dongle 8 (One jack on cable) | `3302:20c1` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | TTGK Technology | 1 ch, 16/24-bit, 44.1 / 48 kHz | 2 ch, 16/24/32-bit, 44.1/48/96 kHz | No fix needed |
+| Dongle 8 (fat white dongle) | `3302:20c1` | Mono mic | 1 (2 not OK) | 44.1 / 48 kHz | TTGK Technology | 1 ch, 16/24-bit, 44.1 / 48 kHz | 2 ch, 16/24/32-bit, 44.1/48/96 kHz | No fix needed |
 
 
 ## ESP-IDF overrides
